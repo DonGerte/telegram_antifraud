@@ -2,9 +2,10 @@
 
 **Production-ready reference implementation** for detecting and mitigating malicious operators in Telegram (spam, raids, scams, multi-accounting).
 
-![CI](https://github.com/DonGerte/telegram_antifraud/actions/workflows/ci.yml/badge.svg) ![Release](https://img.shields.io/github/v/release/DonGerte/telegram_antifraud) ![License](https://img.shields.io/github/license/DonGerte/telegram_antifraud)
+[![GitHub CI](https://github.com/DonGerte/telegram_antifraud/actions/workflows/ci.yml/badge.svg)](https://github.com/DonGerte/telegram_antifraud/actions) ![GitHub Release](https://img.shields.io/github/v/release/DonGerte/telegram_antifraud?style=flat&label=Release) [![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 **Status:** ✅ **PRODUCTION READY** – All core systems + governance/compliance complete  
+**License:** MIT – See [LICENSE](LICENSE), [COPYRIGHT.md](COPYRIGHT.md), and [COPYING](COPYING)  
 **Last Updated:** March 3, 2026
 
 ---
