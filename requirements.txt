@@ -23,7 +23,7 @@ pytest-mock==3.11.0
 
 # Code Quality
 black==23.3.0
-ruff==0.4.0
+ruff==0.15.4
 mypy==1.0.0
 safety==2.3.0
 
