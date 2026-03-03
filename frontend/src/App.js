@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import './i18n';
+import { useTranslation } from 'react-i18next';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Container, AppBar, Toolbar, Typography } from '@mui/material';
 import axios from 'axios';
@@ -13,6 +15,7 @@ import Navigation from './components/Navigation';
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 function App() {
+  const { t, i18n } = useTranslation();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -41,11 +44,20 @@ function App() {
       <AppBar position="static">
         <Toolbar>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            🛡️ Telegram Antifraud Dashboard
+            🛡️ {t('dashboard')} - Telegram Antifraud
           </Typography>
           <Typography variant="body2">
-            {stats && `Usuarios: ${stats.total_users} | En restricción: ${stats.restricted}`}
+            {stats && `${t('total_users')}: ${stats.total_users} | ${t('restricted')}: ${stats.restricted}`}
           </Typography>
+          {/* language switcher */}
+          <select
+            value={i18n.language}
+            onChange={(e) => i18n.changeLanguage(e.target.value)}
+            style={{marginLeft: '1rem'}}
+          >
+            <option value="en">EN</option>
+            <option value="es">ES</option>
+          </select>
         </Toolbar>
       </AppBar>
 

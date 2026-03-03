@@ -196,6 +196,11 @@ def process_message(event):
 
 ### Prometheus metrics
 
+The supplied Grafana dashboard includes extra panels aimed at SRE during
+high‑load conditions: CPU and memory usage of workers, as well as Redis queue
+length. These allow on‑call teams to correlate resource consumption with
+message throughput.
+
 ```python
 from prometheus_client import Counter, Histogram, Gauge
 

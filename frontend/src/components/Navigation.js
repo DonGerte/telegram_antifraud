@@ -6,14 +6,16 @@ import PeopleIcon from '@mui/icons-material/People';
 import RuleIcon from '@mui/icons-material/Rule';
 import HistoryIcon from '@mui/icons-material/History';
 import ErrorIcon from '@mui/icons-material/Error';
+import { useTranslation } from 'react-i18next';
 
 const Navigation = () => {
+  const { t } = useTranslation();
   const navItems = [
-    { label: 'Dashboard', path: '/', icon: DashboardIcon },
-    { label: 'Usuarios', path: '/users', icon: PeopleIcon },
-    { label: 'Reglas', path: '/rules', icon: RuleIcon },
-    { label: 'Auditoría', path: '/audit', icon: HistoryIcon },
-    { label: 'Alertas', path: '/alerts', icon: ErrorIcon },
+    { label: t('dashboard'), path: '/', icon: DashboardIcon },
+    { label: t('users'), path: '/users', icon: PeopleIcon },
+    { label: t('rules'), path: '/rules', icon: RuleIcon },
+    { label: t('audit'), path: '/audit', icon: HistoryIcon },
+    { label: t('alerts'), path: '/alerts', icon: ErrorIcon },
   ];
 
   return (

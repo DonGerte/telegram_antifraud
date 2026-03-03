@@ -15,8 +15,9 @@ Endpoints:
   
   GET    /api/audit            - audit trail
 """
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, Response
 from fastapi.responses import JSONResponse
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -80,6 +81,12 @@ def startup():
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+@app.get("/metrics")
+def metrics():
+    """Prometheus metrics endpoint."""
+    data = generate_latest()
+    return Response(content=data, media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/api/users")

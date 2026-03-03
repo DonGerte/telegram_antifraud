@@ -7,6 +7,9 @@ try:
 except ImportError:
     redis = None
 
+# Prometheus metrics
+from prometheus_client import Counter, Histogram, Gauge, start_http_server
+
 import config
 from engine import scoring, clusters, raid, shadow_mod
 from engine.rules import RuleEngine
@@ -21,6 +24,12 @@ if redis and config.REDIS_URL:
         redis_client = redis.from_url(config.REDIS_URL)
     except Exception:
         redis_client = None
+
+# metrics definitions (worker namespace)
+messages_processed = Counter('worker_messages_processed_total', 'Total messages processed')
+processing_latency = Histogram('worker_processing_duration_seconds', 'Processing time latency seconds')
+queue_length = Gauge('worker_queue_length', 'Length of Redis input queue')
+worker_errors = Counter('worker_errors_total', 'Errors encountered by worker')
 IN_QUEUE = "data_bus"
 OUT_QUEUE = "action_bus"
 
@@ -104,6 +113,13 @@ def enqueue_action(action: str, payload: dict):
 
 
 def main():
+    # start Prometheus metrics server on port 8001
+    try:
+        start_http_server(8001)
+        log.info("prometheus metrics listening on :8001")
+    except Exception:
+        log.warning("could not start prometheus http server")
+
     log.info("worker started, waiting for events")
     while True:
         try:
@@ -111,11 +127,19 @@ def main():
                 log.error("redis not available, sleeping...")
                 time.sleep(5)
                 continue
+
+            # update queue length gauge before blocking
+            try:
+                queue_length.set(redis_client.llen(IN_QUEUE))
+            except Exception:
+                queue_length.set(0)
+
             _, raw = redis_client.blpop(IN_QUEUE, timeout=5)
             if not raw:
                 continue
             event = json.loads(raw)
             et = event.get("type")
+            start_ts = time.time()
             if et == "message":
                 process_message(event)
             elif et == "join":
@@ -124,8 +148,12 @@ def main():
                 raid.auto_cycle_containment(event.get("chat"))
             else:
                 log.debug(f"unhandled event type {et}")
+            # record metrics
+            messages_processed.inc()
+            processing_latency.observe(time.time() - start_ts)
         except Exception as e:
             log.error(f"error processing event: {e}")
+            worker_errors.inc()
             time.sleep(1)
 
 

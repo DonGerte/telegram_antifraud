@@ -64,3 +64,12 @@ groups:
         annotations:
           summary: "False positive rate > 10%"
           description: "Rate: {{ $value | humanizePercentage }}"
+
+      - alert: HighQueueLength
+        expr: worker_queue_length > 1000
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis queue backlog > 1000"
+          description: "Current queue length: {{ $value }}"

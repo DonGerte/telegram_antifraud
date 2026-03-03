@@ -179,6 +179,29 @@ psql $DATABASE_URL -c "SELECT COUNT(*) FROM users;"
 
 ### 2.3 Setting Up Alerts (Prometheus + Grafana)
 
+### 2.4 Automated Backups
+
+A simple script `tools/backup.py` is included for scheduled database and Redis
+backups. Run it from a cronjob or Windows task every 4–6 hours:
+
+```sh
+python tools/backup.py \
+    --pg-dsn "postgresql://user:pass@db/antifraud" \
+    --redis-url "redis://redis:6379" \
+    --out /var/backups/telegram_antifraud
+```
+
+The script uses `pg_dump` (custom format) and triggers a `BGSAVE` on Redis, then
+copies `dump.rdb` to the output directory with a timestamp. Ensure `pg_dump` is
+installed and `redis-py` is available in the Python environment.
+
+Backups can be pushed to S3 or another object store by wrapping this script or
+using standard tools; credentials may be provided via AWS environment variables.
+
+Periodic restore drills are recommended (see §4.2 Disaster Recovery).
+
+### 2.3 Setting Up Alerts (Prometheus + Grafana)
+
 **Prerequisites:**
 ```bash
 # Prometheus collects metrics from /metrics endpoint

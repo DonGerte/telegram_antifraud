@@ -44,6 +44,45 @@
         }
       },
       {
+        "title": "Redis Queue Length",
+        "targets": [
+          {
+            "expr": "worker_queue_length"
+          }
+        ],
+        "type": "gauge",
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 2000
+          }
+        }
+      },
+      {
+        "title": "Worker CPU Usage",
+        "targets": [
+          {
+            "expr": "rate(process_cpu_seconds_total{job=\"worker\"}[1m])"
+          }
+        ],
+        "type": "graph",
+        "fieldConfig": {
+          "defaults": {"unit": "percent"}
+        }
+      },
+      {
+        "title": "Worker Memory",
+        "targets": [
+          {
+            "expr": "process_resident_memory_bytes{job=\"worker\"} / 1024 / 1024"
+          }
+        ],
+        "type": "graph",
+        "fieldConfig": {
+          "defaults": {"unit": "MB"}
+        }
+      },
+      {
         "title": "Processing Latency (p99)",
         "targets": [
           {
