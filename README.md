@@ -118,6 +118,57 @@ telegram_antifraud/
    # Terminal 1: python bots/public_bot.py
    # Terminal 2: python engine/worker.py
    # Terminal 3: python bots/private_bot.py
+
+---
+
+## ☸️ Kubernetes Deployment (Large Groups)
+
+For high‑traffic groups the recommended platform is Kubernetes. A simple cluster offers
+high availability, auto‑scaling and the ability to handle tens of thousands of messages
+per minute. The `k8s/` directory contains example manifests that match this repository's
+architecture.
+
+1. **Build & publish** a container image to a registry, e.g. `ghcr.io/<you>/telegram_antifraud:latest`.
+2. **Create secrets** for the database and Telegram token:
+   ```sh
+   kubectl create secret generic telegram-secret --from-literal=token="$TELEGRAM_TOKEN"
+   kubectl create secret generic antifraud-db-secret --from-literal=password="supersecret"
+   ```
+3. **Apply infrastructure manifests** (adjust storage classes and resource sizes):
+   ```sh
+   kubectl apply -f k8s/redis-statefulset.yaml
+   kubectl apply -f k8s/postgres-deployment.yaml
+   kubectl apply -f k8s/webhook-deployment.yaml
+   kubectl apply -f k8s/worker-deployment.yaml
+   kubectl apply -f k8s/ingress.yaml
+   kubectl apply -f k8s/hpa.yaml
+   ```
+4. **Configure TLS & DNS**: ensure `cert-manager` is installed and `yourdomain.example.com` points
+to the ingress controller. Webhook endpoint should be `https://yourdomain.example.com/webhook`.
+5. **Autoscaling**: the HPA uses CPU and a custom Prometheus metric (`redis_queue_length`) to
+
+---
+
+## 🔧 Utilities
+
+* `tools/backup.py` – scheduleable Postgres/Redis backup helper (see docs/OPERATIONS_MANUAL.md).
+* `tools/sdk.py` – simple Python client for the REST API.
+* `tools/load_test.py` – generate traffic against the webhook endpoint for benchmarking.
+
+These are useful when automating maintenance, integrating with other systems, or
+validating performance under load.
+
+---
+
+grow/shrink the worker set automatically.
+
+> With this setup the system can scale horizontally by simply increasing the
+> Replica count or allowing the HPA to adjust based on load. Redis and Postgres are
+> the only stateful services and can be backed by managed offerings for production.
+
+---
+
+Hecho por hasbulla
    # Terminal 4: uvicorn api.dashboard:app --reload
    ```
 
