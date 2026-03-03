@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: antifraud-postgres
+  labels:
+    app: antifraud
+    tier: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: antifraud
+      tier: database
+  template:
+    metadata:
+      labels:
+        app: antifraud
+        tier: database
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        env:
+        - name: POSTGRES_DB
+          value: antifraud
+        - name: POSTGRES_USER
+          value: antifraud
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: antifraud-db-secret
+              key: password
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - mountPath: /var/lib/postgresql/data
+          name: postgres-data
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "1"
+            memory: "1Gi"
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: antifraud-postgres-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: antifraud-postgres-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: antifraud-postgres
+  labels:
+    app: antifraud
+    tier: database
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    app: antifraud
+    tier: database

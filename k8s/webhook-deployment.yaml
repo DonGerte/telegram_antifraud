@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: antifraud-webhook
+  labels:
+    app: antifraud
+    tier: webhook
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: antifraud
+      tier: webhook
+  template:
+    metadata:
+      labels:
+        app: antifraud
+        tier: webhook
+    spec:
+      containers:
+      - name: webhook
+        image: ghcr.io/dongerte/telegram_antifraud:latest
+        env:
+        - name: REDIS_URL
+          value: "redis://antifraud-redis:6379/0"
+        - name: DATABASE_URL
+          value: "postgresql://antifraud:${POSTGRES_PASSWORD}@antifraud-postgres:5432/antifraud"
+        - name: TELEGRAM_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: telegram-secret
+              key: token
+        ports:
+        - containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1"
+            memory: "1Gi"

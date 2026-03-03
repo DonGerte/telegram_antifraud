@@ -1,5 +1,11 @@
 # Instrucciones de Deployment a GitHub
 
+**License:** MIT  
+**Contact:** hasbullita007@gmail.com  
+**Maintained by:** hasbulla
+
+---
+
 ## Previa: Configuración de Git
 
 ### 1. Verificar que Git esté instalado
@@ -10,7 +16,7 @@ git --version
 ### 2. Configurar credenciales de Git (primera vez)
 ```bash
 git config --global user.name "hasbulla"
-git config --global user.email "hasbulla@example.com"
+git config --global user.email "hasbullita007@gmail.com"
 ```
 
 ---

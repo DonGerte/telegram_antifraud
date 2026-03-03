@@ -1,5 +1,11 @@
 FROM python:3.11-slim
 
+LABEL maintainer="hasbulla <hasbullita007@gmail.com>"
+LABEL description="Telegram Anti-Fraud System - Production-ready moderation engine"
+LABEL version="0.1.0"
+LABEL license="MIT"
+LABEL repository="https://github.com/DonGerte/telegram_antifraud"
+
 WORKDIR /app
 
 # Copy requirements

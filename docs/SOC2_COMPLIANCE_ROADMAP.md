@@ -3,7 +3,9 @@
 **Objetivo:** Certificación SOC 2 Type II (auditoría de confianza, seguridad, disponibilidad, integridad, confidencialidad)  
 **Timeline:** 12-18 meses  
 **Costo Estimado:** $50K-100K  
-**Beneficios:** Confianza del cliente, requisitos corporativos, cumplimiento legal
+**Beneficios:** Confianza del cliente, requisitos corporativos, cumplimiento legal  
+**License:** MIT  
+**Contact:** hasbullita007@gmail.com
 
 ---
 

@@ -1,7 +1,9 @@
 # Privacy Policy
 
 **Last Updated:** March 3, 2026  
-**Effective Date:** March 3, 2026
+**Effective Date:** March 3, 2026  
+**License:** MIT  
+**Contact:** hasbullita007@gmail.com
 
 ---
 

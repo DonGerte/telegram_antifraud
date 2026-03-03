@@ -693,5 +693,21 @@ Contributions welcome! Please:
 
 ---
 
+## 📜 License
+
+This project is licensed under the **MIT License** – see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 📧 Contact & Support
+
+- **Email:** hasbullita007@gmail.com
+- **GitHub Issues:** [Report bugs or request features](https://github.com/DonGerte/telegram_antifraud/issues)
+- **GitHub Discussions:** [Ask questions or share ideas](https://github.com/DonGerte/telegram_antifraud/discussions)
+
+For security vulnerabilities, please refer to [SECURITY.md](docs/SECURITY_POLICY.md).
+
+---
+
 **Hecho por hasbulla con ❤️ para una moderación segura y transparente**  
 **Última actualización:** 3 de marzo de 2026

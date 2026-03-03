@@ -1,5 +1,12 @@
 # Políticas de Moderación y Gobernanza
 
+**Last Updated:** March 3, 2026  
+**License:** MIT  
+**Contact:** hasbullita007@gmail.com  
+**Responsable:** hasbulla team
+
+---
+
 ## 1. Principios Rectores
 
 ### 1.1 Seguridad de la Comunidad

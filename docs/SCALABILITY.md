@@ -1,5 +1,11 @@
 # Documentación de Escalado Horizontal
 
+**Last Updated:** March 3, 2026  
+**License:** MIT  
+**Contact:** hasbullita007@gmail.com
+
+---
+
 ## Escalado con Redis Cluster
 
 ### Setup básico con Docker Compose

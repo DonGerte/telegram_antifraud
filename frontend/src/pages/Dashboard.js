@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Grid, Paper, Typography, Box, CircularProgress } from '@mui/material';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -15,10 +16,11 @@ const Dashboard = ({ stats, loading }) => {
     return <Typography color="error">Error: No data available</Typography>;
   }
 
+  const { t } = useTranslation();
   const statusData = [
-    { name: 'Normal', value: stats.total_users - stats.restricted - stats.banned },
-    { name: 'Restricción', value: stats.restricted },
-    { name: 'Baneados', value: stats.banned },
+    { name: t('normal'), value: stats.total_users - stats.restricted - stats.banned },
+    { name: t('restricted'), value: stats.restricted },
+    { name: t('banned'), value: stats.banned },
   ];
 
   const COLORS = ['#4caf50', '#ff9800', '#f44336'];
@@ -33,21 +35,21 @@ const Dashboard = ({ stats, loading }) => {
   return (
     <Grid container spacing={3}>
       <Grid item xs={12} sm={6} md={3}>
-        <StatCard title="Total de Usuarios" value={stats.total_users} color="#2196F3" />
+        <StatCard title={t('total_users')} value={stats.total_users} color="#2196F3" />
       </Grid>
       <Grid item xs={12} sm={6} md={3}>
-        <StatCard title="Acciones Hoy" value={stats.actions_today} color="#4CAF50" />
+        <StatCard title={t('actions_today')} value={stats.actions_today} color="#4CAF50" />
       </Grid>
       <Grid item xs={12} sm={6} md={3}>
-        <StatCard title="En Restricción" value={stats.restricted} color="#FF9800" />
+        <StatCard title={t('restricted')} value={stats.restricted} color="#FF9800" />
       </Grid>
       <Grid item xs={12} sm={6} md={3}>
-        <StatCard title="Baneados" value={stats.banned} color="#F44336" />
+        <StatCard title={t('banned')} value={stats.banned} color="#F44336" />
       </Grid>
 
       <Grid item xs={12} md={6}>
         <Paper sx={{ p: 2 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Estado de Usuarios</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>{t('user_status')}</Typography>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie data={statusData} cx="50%" cy="50%" labelLine={false} label>
@@ -63,10 +65,10 @@ const Dashboard = ({ stats, loading }) => {
 
       <Grid item xs={12} md={6}>
         <Paper sx={{ p: 2 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Acciones Recientes</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>{t('recent_actions')}</Typography>
           <Box sx={{ overflowX: 'auto' }}>
-            <Typography variant="body2">Últimas 24 horas: {stats.actions_today} acciones</Typography>
-            <Typography variant="body2">7 días: {stats.actions_today * 7} estimado</Typography>
+            <Typography variant="body2">{t('last_24h')}: {stats.actions_today} {t('actions')}</Typography>
+            <Typography variant="body2">{t('last_7d')}: {stats.actions_today * 7} {t('estimated')}</Typography>
           </Box>
         </Paper>
       </Grid>

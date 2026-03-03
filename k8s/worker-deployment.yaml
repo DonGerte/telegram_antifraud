@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: antifraud-worker
+  labels:
+    app: antifraud
+    tier: worker
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: antifraud
+      tier: worker
+  template:
+    metadata:
+      labels:
+        app: antifraud
+        tier: worker
+    spec:
+      containers:
+      - name: worker
+        image: ghcr.io/dongerte/telegram_antifraud:latest
+        command: ["python", "-m", "worker"]
+        env:
+        - name: REDIS_URL
+          value: "redis://antifraud-redis:6379/0"
+        - name: DATABASE_URL
+          value: "postgresql://antifraud:${POSTGRES_PASSWORD}@antifraud-postgres:5432/antifraud"
+        ports:
+        - containerPort: 8000
+        readinessProbe:
+          exec:
+            command: ["/bin/sh", "-c", "python -c 'import sys; sys.exit(0)'"]
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1"
+            memory: "1Gi"

@@ -8,4 +8,9 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-Hecho por hasbulla
+**License:** MIT  
+**Author:** hasbulla  
+**Contact:** hasbullita007@gmail.com  
+**Repository:** https://github.com/DonGerte/telegram_antifraud
+
+Hecho por hasbulla con ❤️

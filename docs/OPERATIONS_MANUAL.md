@@ -2,7 +2,9 @@
 
 **For:** System Administrators, Moderators, Infrastructure Engineers  
 **Last Updated:** March 3, 2026  
-**Status:** Production Ready
+**Status:** Production Ready  
+**License:** MIT  
+**Contact:** hasbullita007@gmail.com
 
 ---
 

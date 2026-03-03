@@ -12,7 +12,7 @@ If you discover a security vulnerability in this project, please report it respo
 
 **Primary Contact:**
 ```
-Email: security@example.com
+Email: hasbullita007@gmail.com
 (Include "SECURITY:" in subject line)
 ```
 
