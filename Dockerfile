@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 LABEL maintainer="hasbulla <hasbullita007@gmail.com>"
 LABEL description="Telegram Anti-Fraud System - Production-ready moderation engine"
