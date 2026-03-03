@@ -1,0 +1,46 @@
+[
+    {
+        "name": "high_score_kick",
+        "enabled": true,
+        "condition": {"score_gt": 50},
+        "action": "kick",
+        "reason": "score>50",
+        "priority": 1
+    },
+    {
+        "name": "honeypot_immediate_kick",
+        "enabled": true,
+        "condition": {"has_signal": "honeypot"},
+        "action": "kick",
+        "reason": "honeypot detected",
+        "priority": 2
+    },
+    {
+        "name": "high_velocity_restrict",
+        "enabled": true,
+        "condition": {"velocity_gt": 30},
+        "action": "restrict",
+        "reason": "too many messages",
+        "priority": 1
+    },
+    {
+        "name": "cluster_with_high_score",
+        "enabled": true,
+        "condition": {
+            "cluster_gt": 2,
+            "score_gt": 30,
+            "cluster_and_score": true
+        },
+        "action": "kick",
+        "reason": "part of suspicious network",
+        "priority": 2
+    },
+    {
+        "name": "raid_bunker_mode",
+        "enabled": true,
+        "condition": {"raid_active": true},
+        "action": "raid_alert",
+        "reason": "raid detected, activating containment",
+        "priority": 3
+    }
+]

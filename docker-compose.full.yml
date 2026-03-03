@@ -1,0 +1,169 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "PING"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: antifraud
+      POSTGRES_PASSWORD: secure_password_change_me
+      POSTGRES_DB: antifraud
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U antifraud"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  public_bot:
+    build: .
+    command: python bots/public_bot.py
+    depends_on:
+      - redis
+      - postgres
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://antifraud:secure_password_change_me@postgres:5432/antifraud
+      REDIS_URL: redis://redis:6379/0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import redis; redis.from_url('redis://redis:6379').ping()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  worker:
+    build: .
+    command: python engine/worker.py
+    depends_on:
+      - redis
+      - postgres
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://antifraud:secure_password_change_me@postgres:5432/antifraud
+      REDIS_URL: redis://redis:6379/0
+    restart: unless-stopped
+    deploy:
+      replicas: 2  # Multi-worker for scalability
+    healthcheck:
+      test: ["CMD", "python", "-c", "import redis; redis.from_url('redis://redis:6379').ping()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  private_bot:
+    build: .
+    command: python bots/private_bot.py
+    depends_on:
+      - redis
+      - postgres
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://antifraud:secure_password_change_me@postgres:5432/antifraud
+      REDIS_URL: redis://redis:6379/0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import redis; redis.from_url('redis://redis:6379').ping()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  dashboard:
+    build: .
+    command: uvicorn api.dashboard:app --host 0.0.0.0 --port 8000
+    depends_on:
+      - redis
+      - postgres
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://antifraud:secure_password_change_me@postgres:5432/antifraud
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/alert-rules.yml:/etc/prometheus/alert-rules.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    restart: unless-stopped
+    depends_on:
+      - worker
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana-dashboard-antifraud.json:/etc/grafana/provisioning/dashboards/antifraud.json
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  redis_data:
+    driver: local
+  postgres_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  alertmanager_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  default:
+    driver: bridge

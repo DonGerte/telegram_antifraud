@@ -1,0 +1,66 @@
+groups:
+  - name: antifraud.rules
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: rate(worker_errors_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Worker error rate > 5%"
+          description: "Error rate: {{ $value }}"
+
+      - alert: LowWorkerHealth
+        expr: count(up{job="worker"}) < 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Less than 3 workers running"
+          description: "Active workers: {{ $value }}"
+
+      - alert: HighMessageLatency
+        expr: histogram_quantile(0.99, worker_processing_duration_seconds) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Message processing latency > 500ms"
+          description: "p99 latency: {{ $value }}s"
+
+      - alert: DatabaseDown
+        expr: up{job="postgres"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL database unreachable"
+          description: "Database connection lost"
+
+      - alert: RedisHighMemory
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage > 85%"
+          description: "Memory: {{ $value | humanizePercentage }}"
+
+      - alert: RaidDetectionFailure
+        expr: rate(worker_raids_detected_total[1h]) == 0
+        for: 1h
+        labels:
+          severity: info
+        annotations:
+          summary: "No raids detected in last hour"
+          description: "Raid detection might be disabled"
+
+      - alert: HighFalsePositiveRate
+        expr: (worker_false_positives_total / worker_actions_taken_total) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "False positive rate > 10%"
+          description: "Rate: {{ $value | humanizePercentage }}"

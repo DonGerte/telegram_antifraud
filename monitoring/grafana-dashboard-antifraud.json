@@ -1,0 +1,125 @@
+{
+  "dashboard": {
+    "title": "Telegram Antifraud System",
+    "tags": ["antifraud", "security", "telegram"],
+    "timezone": "UTC",
+    "panels": [
+      {
+        "title": "Messages Processed (Last Hour)",
+        "targets": [
+          {
+            "expr": "rate(worker_messages_processed_total[1h])"
+          }
+        ],
+        "type": "graph"
+      },
+      {
+        "title": "Moderation Actions",
+        "targets": [
+          {
+            "expr": "increase(worker_actions_taken_total[1h])"
+          }
+        ],
+        "type": "stat"
+      },
+      {
+        "title": "Error Rate",
+        "targets": [
+          {
+            "expr": "rate(worker_errors_total[5m])"
+          }
+        ],
+        "type": "graph",
+        "alert": {
+          "name": "HighErrorRate",
+          "conditions": [
+            {
+              "evaluator": {"type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "type": "query",
+              "value": 0.05
+            }
+          ]
+        }
+      },
+      {
+        "title": "Processing Latency (p99)",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, worker_processing_duration_seconds)"
+          }
+        ],
+        "type": "graph"
+      },
+      {
+        "title": "Redis Memory Usage",
+        "targets": [
+          {
+            "expr": "redis_memory_used_bytes / 1024 / 1024 / 1024"
+          }
+        ],
+        "type": "gauge",
+        "fieldConfig": {
+          "defaults": {
+            "max": 10,
+            "min": 0,
+            "unit": "GB"
+          }
+        }
+      },
+      {
+        "title": "Active Users Under Monitoring",
+        "targets": [
+          {
+            "expr": "count(worker_user_score) by (status)"
+          }
+        ],
+        "type": "piechart"
+      },
+      {
+        "title": "Raids Detected (Today)",
+        "targets": [
+          {
+            "expr": "increase(worker_raids_detected_total[24h])"
+          }
+        ],
+        "type": "stat"
+      },
+      {
+        "title": "False Positive Rate",
+        "targets": [
+          {
+            "expr": "(worker_false_positives_total / worker_actions_taken_total) * 100"
+          }
+        ],
+        "type": "gauge",
+        "fieldConfig": {
+          "defaults": {
+            "max": 100,
+            "min": 0,
+            "unit": "percent"
+          }
+        }
+      },
+      {
+        "title": "Database Query Performance",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, db_query_duration_seconds) by (method)"
+          }
+        ],
+        "type": "graph"
+      },
+      {
+        "title": "Top Users by Risk Score",
+        "targets": [
+          {
+            "expr": "topk(10, worker_user_score)"
+          }
+        ],
+        "type": "table"
+      }
+    ]
+  }
+}
