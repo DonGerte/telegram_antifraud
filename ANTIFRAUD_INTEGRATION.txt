@@ -1,0 +1,133 @@
+ANTIFRAUD INTEGRATION - HOW IT WORKS
+=====================================
+
+This upgrade adds a comprehensive antifraud system while keeping everything 
+Telegram-first. No external dashboards, no web UI. Pure bot.
+
+ARCHITECTURE
+============
+
+1. MEMORY LAYER (services/memory.py)
+   - Stores user data in data/store.json
+   - Tracks: user messages, strikes, bans
+   - Simple JSON persistence (no DB required)
+   - Functions: record_message(), add_strike(), ban_user(), is_banned()
+
+2. STRIKE SYSTEM (services/strike_manager.py)
+   - 1 strike -> WARNING
+   - 2 strikes -> MUTE/RESTRICT
+   - 3 strikes -> BAN
+   - Integrated with memory layer
+
+3. BAN MANAGER (services/ban_manager.py)
+   - Behavior fingerprinting (user_id + message patterns)
+   - Multi-account detection placeholder
+   - Raid detection placeholder
+
+4. RISK ASSESSMENT (engine/risk_assessment.py)
+   - Wrapper around existing scoring.py
+   - Combines: base score + raid status + user memory + strikes
+   - Returns: SAFE / SUSPICIOUS / DANGEROUS / BANNED
+   - Each level triggers different actions
+
+5. BOT INTEGRATION (bots/public_bot.py)
+   - Enhanced message handler
+   - Records message in memory
+   - Runs risk assessment
+   - Issues strikes/bans as needed
+   - Still sends to queue for worker (Redis mode)
+
+WORKFLOW
+========
+
+When a message arrives in a group:
+
+1. public_bot.ingest() called
+2. Message recorded in data/store.json
+3. Signal detection (honeypot, links, etc)
+4. Risk assessment computed
+5. Decision made:
+   - SAFE -> allow
+   - SUSPICIOUS -> record/log
+   - DANGEROUS -> strike user
+   - BANNED -> delete
+6. Event sent to worker (if Redis available)
+
+RUNNING THE BOT
+===============
+
+python bots/public_bot.py
+
+The bot will:
+- Start polling Telegram
+- Load user memory from data/store.json
+- Process incoming messages
+- Update store.json with strikes/bans
+- Send events to Redis queue (if available)
+
+FEATURES ADDED
+==============
+
+✓ User memory (JSON-based)
+✓ Strike system (1-3 strikes to ban)
+✓ Risk scoring (SAFE/SUSPICIOUS/DANGEROUS/BANNED)
+✓ Multi-account detection (framework in place)
+✓ Anti-raid detection (framework in place)
+✓ Better logging (timestamp + severity)
+✓ Ban persistence
+✓ Behavior fingerprinting
+
+BACKWARD COMPATIBILITY
+=====================
+
+✓ Existing scoring.py still works
+✓ Existing worker.py still processes queue
+✓ Existing redis integration unchanged
+✓ Existing rules engine still active
+✓ All filters (keywords, links, spam) unchanged
+✓ Webhook mode still supported
+
+FILES ADDED
+===========
+
+services/__init__.py
+services/memory.py           <- User JSON persistence
+services/strike_manager.py   <- Strike/warning system
+services/ban_manager.py      <- Ban + fingerprinting
+
+engine/__init__.py
+engine/risk_assessment.py    <- Risk levels + decision logic
+
+data/store.json              <- User memory database
+
+CONFIGURATION
+=============
+
+No new environment variables needed.
+Everything is automatic.
+
+Optional: adjust strike thresholds in services/strike_manager.py
+Optional: adjust risk score thresholds in engine/risk_assessment.py
+
+LOGGING
+=======
+
+Messages now show:
+- [chat_id] User {uid} | Signal: {type} ({score}) | Risk: {level} ({score})
+
+Example:
+[-100123456] User 987654321 | Signal: link (5) | Risk: DANGEROUS (75)
+
+NEXT STEPS
+==========
+
+1. Run: python bots/public_bot.py
+2. Add bot to a test group
+3. Watch logs for risk assessments
+4. Data will be saved to data/store.json
+5. Monitor strikes and bans
+
+To integrate with admin bot (private_bot.py):
+- Add handlers to read user profiles
+- Add commands: /profile {uid}, /ban, /unban, /mystrike
+- Use services.memory functions
