@@ -15,6 +15,7 @@ services:
     depends_on:
       - redis
     env_file: .env
+    restart: unless-stopped
 
   worker:
     build: .
@@ -29,6 +30,7 @@ services:
     depends_on:
       - redis
     env_file: .env
+    restart: unless-stopped
 
 volumes:
   redis_data:
