@@ -108,6 +108,35 @@ telegram_antifraud/
 
 2. **Option A: Docker Compose (Recommended)**
    ```bash
+
+### Webhook mode (Full production)
+
+The project now includes a webhook endpoint and a worker pipeline:
+
+- API: `bots/webhook.py` (FastAPI, accepts Telegram updates at `/webhook`)
+- Worker: `engine/worker.py` (consumes `data_bus`, processes rules, pushes actions to `action_bus`)
+- Helper script: `scripts/setup_webhook.sh` to set Telegram webhook
+
+To use:
+
+1. Set `WEBHOOK_URL` and `WEBHOOK_SECRET_TOKEN` in `.env`.
+2. Start compose:
+   ```bash
+   docker compose up -d
+   ```
+3. Configure webhook:
+   ```bash
+   ./scripts/setup_webhook.sh
+   ```
+4. Validate service:
+   ```bash
+   curl http://localhost:8000/healthz
+   ```
+
+------
+
+2. **Option A: Docker Compose (Recommended)**
+   ```bash
    docker-compose up -d
    # Services: public_bot, worker, private_bot, redis all running
    docker-compose logs -f worker  # Monitor processing

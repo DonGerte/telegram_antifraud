@@ -23,6 +23,17 @@ services:
     depends_on:
       - redis
     env_file: .env
+    restart: unless-stopped
+
+  webhook_api:
+    build: .
+    command: uvicorn bots.webhook:app --host 0.0.0.0 --port 8000
+    depends_on:
+      - redis
+    env_file: .env
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
 
   private_bot:
     build: .

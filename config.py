@@ -17,4 +17,7 @@ RAID_WINDOW = int(os.environ.get("RAID_WINDOW", "300"))
 # path to JSON file containing decision rules (optional)
 RULES_FILE = os.environ.get("RULES_FILE", "rules.json")
 
+WEBHOOK_SECRET_TOKEN = os.environ.get("WEBHOOK_SECRET_TOKEN", "")
+ALLOWED_UPDATES = os.environ.get("ALLOWED_UPDATES", "[\"message\",\"edited_channel_post\",\"callback_query\"]")
+
 # other configuration values can be added here
