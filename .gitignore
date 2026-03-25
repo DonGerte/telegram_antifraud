@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 *.pyo
 .env.*
+*.session
+*.session-journal
+run.py
+requirements-simple.txt

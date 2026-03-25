@@ -1,4 +1,8 @@
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Credentials for bots and API access
 PUBLIC_BOT_TOKEN = os.environ.get("PUBLIC_BOT_TOKEN")

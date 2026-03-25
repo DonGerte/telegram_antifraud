@@ -1,10 +1,10 @@
-# Telegram Anti‑Fraud System
+# Telegram Anti-Fraud System
 
 **Production-ready reference implementation** for detecting and mitigating malicious operators in Telegram (spam, raids, scams, multi-accounting).
 
 [![GitHub CI](https://github.com/DonGerte/telegram_antifraud/actions/workflows/ci.yml/badge.svg)](https://github.com/DonGerte/telegram_antifraud/actions) ![GitHub Release](https://img.shields.io/github/v/release/DonGerte/telegram_antifraud?style=flat&label=Release) [![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**Status:** ✅ **PRODUCTION READY** – All core systems + governance/compliance complete  
+**Status:** ✅ **PRODUCTION READY** – Complete antifraud system with risk scoring, strikes, memory, and admin controls  
 **License:** MIT – See [LICENSE](LICENSE), [COPYRIGHT.md](COPYRIGHT.md), and [COPYING](COPYING)  
 **Last Updated:** March 3, 2026
 
@@ -12,31 +12,31 @@
 
 ## 🎯 System Overview
 
-This is a **complete, containerized anti-fraud solution** with:
+This is a **complete, containerized anti-fraud solution** with advanced risk assessment and automated moderation:
 
 ### Core Detection Engine
-- **Message velocity tracking**: High-rate spam detection
-- **Repetition detection**: Identify duplicate/similar messages via MD5 hashing
-- **Honeypot similarity**: Levenshtein distance-based pattern matching
-- **Raid detection**: Threshold-based join spike detection with 3 containment modes
-- **User clustering**: Network analysis to identify multi-account operations
-- **Scoring & decay**: Time-weighted user risk scores
+- **Risk Assessment**: Multi-factor risk scoring (SAFE/SUSPICIOUS/DANGEROUS/BANNED levels)
+- **Strike System**: Progressive discipline (1-3 strikes to ban)
+- **User Memory**: Persistent behavior tracking with JSON storage
+- **Behavior Fingerprinting**: Multi-account detection via pattern analysis
+- **Message Analysis**: Content-based risk evaluation
+- **Raid Detection**: Coordinated attack pattern recognition
 
 ### Moderation Infrastructure
-- **Rules engine**: Flexible decision logic (AND/OR, priorities, conditions)
-- **Shadow moderation**: Silent restrictions without public visibility
-- **FastAPI dashboard**: Real-time moderator interface with CRUD rules
-- **PostgreSQL persistence**: User history, signals, actions, audit trail
-- **Structured JSON logging**: Full event tracking for compliance
+- **Admin Bot**: Comprehensive command interface for user management
+- **Automated Actions**: Risk-based automatic moderation
+- **Memory Persistence**: User history and behavior tracking
+- **Test Mode**: Validation without Telegram connection
+- **Comprehensive Testing**: Full test suite for all components
 
 ### Production Readiness
-- ✅ Docker Compose containerization (Redis + 3 bots + dashboard)
-- ✅ SQLAlchemy ORM with 6-table schema
-- ✅ Comprehensive pytest test suite (14/14 tests passing)
-- ✅ Security policies (GDPR, CCPA, Telegram ToS compliance)
-- ✅ Operations manual with incident response playbooks
-- ✅ Scaling documentation (Redis Cluster, Kafka, multi-worker)
-- ✅ Privacy policy and moderation governance
+- ✅ Docker Compose containerization (Redis + bots)
+- ✅ JSON-based user database with metadata
+- ✅ Automated test suite (comprehensive validation)
+- ✅ Admin command interface
+- ✅ Risk assessment engine
+- ✅ Strike and ban management
+- ✅ Memory and fingerprinting systems
 
 ---
 
@@ -45,9 +45,354 @@ This is a **complete, containerized anti-fraud solution** with:
 ```
 telegram_antifraud/
 ├── bots/
-│   ├── public_bot.py          # Message/join ingest + velocity tracking
-│   ├── private_bot.py         # Moderation actions (kick, mute, restrict)
-│   └── userbot.py             # OPSEC-hardened investigation tool
+│   ├── public_bot.py          # Main bot with antifraud integration
+│   ├── private_bot.py         # Admin bot with management commands
+│   └── userbot.py             # Userbot for investigation
+├── engine/
+│   ├── risk_assessment.py     # Risk level evaluation engine
+│   ├── scoring.py             # Message and behavior scoring
+│   ├── clusters.py            # Multi-account detection
+│   ├── honeypot.py            # Spam pattern matching
+│   ├── raid.py                # Raid detection and containment
+│   ├── signals.py             # Signal definitions
+│   └── logger.py              # Event logging
+├── services/
+│   ├── memory.py              # User data persistence
+│   ├── strike_manager.py      # Strike progression system
+│   └── ban_manager.py         # Ban management and fingerprinting
+├── data/
+│   └── store.json             # User database
+├── examples/
+│   ├── logging.py             # Logging examples
+│   └── metrics.py             # Metrics collection
+├── tests.py                   # Comprehensive test suite
+├── docker-compose.yml         # Multi-service setup
+├── requirements.txt           # Python dependencies
+├── config.py                  # Configuration settings
+└── README.md                  # This file
+```
+
+---
+
+## 🚀 Inicio Rápido
+
+### 1. Obtener Tokens de Bot
+1. Ve a [@BotFather](https://t.me/BotFather) en Telegram
+2. Crea dos bots:
+   - `/newbot` → Bot público (para monitoreo de grupos)
+   - `/newbot` → Bot privado (para comandos admin)
+3. Copia los tokens que te da BotFather
+
+### 2. Configurar el Sistema
+```bash
+# Instalar dependencias
+pip install -r requirements.txt
+
+# Ejecutar setup interactivo
+python run.py
+```
+
+El script de setup te guiará para:
+- ✅ Verificar dependencias
+- ✅ Crear archivo `.env` con tus tokens
+- ✅ Verificar Redis
+- ✅ Ejecutar tests
+- ✅ Iniciar los bots
+
+### 3. Archivo .env
+Crea un archivo `.env` en la raíz del proyecto:
+```env
+PUBLIC_BOT_TOKEN=tu_token_del_bot_publico
+PRIVATE_BOT_TOKEN=tu_token_del_bot_privado
+REDIS_URL=redis://localhost:6379/0
+```
+
+### 4. Iniciar Redis
+```bash
+# Instalar Redis (Windows con Chocolatey)
+choco install redis-64
+
+# O usar Docker
+docker run -d -p 6379:6379 redis:7-alpine
+
+# Iniciar Redis
+redis-server
+```
+
+### 5. Ejecutar los Bots
+```bash
+# Opción A: Usar el script interactivo
+python run.py
+# Selecciona opción 3 para ejecutar ambos bots
+
+# Opción B: Manualmente en terminales separadas
+# Terminal 1: Bot público (monitoreo)
+python bots/public_bot.py
+
+# Terminal 2: Bot privado (admin)
+python bots/private_bot.py
+```
+
+### 6. Probar el Bot
+1. **Bot Público**: Envia `/start` en chat privado con el bot público
+2. **Bot Admin**: Envia `/start` en chat privado con el bot privado
+3. **En Grupo**: Agrega el bot público a un grupo como administrador
+
+### 7. Comandos Disponibles
+
+#### Bot Público (Monitoreo)
+- `/start` - Información del bot
+- `/help` - Ayuda
+- `/status` - Estado del sistema
+
+#### Bot Privado (Admin)
+- `/start` - Lista de comandos
+- `/stats` - Estadísticas del sistema
+- `/user <id>` - Información de usuario
+- `/ban <id> [razón]` - Banear usuario
+- `/unban <id>` - Desbanear usuario
+- `/strike <id> [razón]` - Agregar strike
+- `/forgive <id>` - Quitar strike
+- `/risk <id>` - Evaluar riesgo
+- `/containment <chat_id> <modo>` - Modo contención
+- `/whitelist <id>` - Agregar a whitelist
+- `/blacklist <id>` - Agregar a blacklist
+- `/test` - Ejecutar tests
+
+### 8. Verificar Funcionamiento
+```bash
+# Ejecutar tests
+python tests.py
+
+# Modo test (sin Telegram)
+python bots/public_bot.py --test-mode
+python bots/private_bot.py --test-mode
+```
+python bots/private_bot.py --test-mode
+
+# Run full test suite
+python tests.py
+```
+
+---
+
+## 🎯 Core Features
+
+### Risk Assessment Engine
+- **Multi-level Risk**: SAFE, SUSPICIOUS, DANGEROUS, BANNED
+- **Factor-based Scoring**: Combines message content, user history, and behavior patterns
+- **Real-time Evaluation**: Assess risk on every message and user action
+
+### Strike System
+- **Progressive Discipline**: 1st strike (warning), 2nd strike (restriction), 3rd strike (ban)
+- **Reason Tracking**: Detailed strike history with timestamps
+- **Flexible Management**: Add/remove strikes via admin commands
+
+### User Memory System
+- **Persistent Storage**: JSON-based user database
+- **Behavior Tracking**: Message history, strikes, bans, timestamps
+- **Metadata Management**: First seen, last seen, tags, whitelist/blacklist
+
+### Admin Command Interface
+Comprehensive bot management via private chat:
+
+```
+/start - Show available commands
+/stats - System statistics
+/user <id> - User information and risk assessment
+/ban <id> [reason] - Ban user
+/unban <id> - Unban user
+/strike <id> [reason] - Add strike to user
+/forgive <id> - Remove strike from user
+/risk <id> - Assess user risk
+/containment <chat_id> <mode> - Set containment mode
+/whitelist <id> - Add to whitelist
+/blacklist <id> - Add to blacklist
+/test - Run system tests
+```
+
+### Automated Moderation
+- **Risk-based Actions**: Automatic moderation based on risk levels
+- **Strike Progression**: Automatic strikes for suspicious behavior
+- **Ban Automation**: Automatic bans after 3 strikes
+- **Containment Modes**: Slow mode, bunker mode for raid protection
+
+---
+
+## 🧪 Testing
+
+Run the comprehensive test suite:
+
+```bash
+python tests.py
+```
+
+Tests cover:
+- ✅ Memory service functionality
+- ✅ Strike manager operations
+- ✅ Ban manager and fingerprinting
+- ✅ Risk assessment engine
+- ✅ Scoring algorithms
+- ✅ Full system integration
+
+---
+
+## 🔧 Configuration
+
+### Bot Configuration (`config.py`)
+```python
+# Telegram Bot Tokens
+PUBLIC_BOT_TOKEN = "your_public_bot_token_here"
+PRIVATE_BOT_TOKEN = "your_private_bot_token_here"
+
+# Redis Configuration
+REDIS_URL = "redis://localhost:6379/0"
+
+# Risk Assessment Thresholds
+SAFE_THRESHOLD = 0.3
+SUSPICIOUS_THRESHOLD = 0.6
+DANGEROUS_THRESHOLD = 0.8
+
+# Strike Configuration
+MAX_STRIKES_BEFORE_BAN = 3
+
+# Memory Configuration
+STORE_FILE = "data/store.json"
+```
+
+### User Database (`data/store.json`)
+```json
+{
+  "users": {
+    "12345": {
+      "message_count": 10,
+      "strikes": 1,
+      "banned": false,
+      "first_seen": "2024-01-01T10:00:00Z",
+      "last_seen": "2024-01-02T15:30:00Z",
+      "tags": ["suspicious"],
+      "strike_history": [
+        {"reason": "spam", "timestamp": "2024-01-02T14:00:00Z"}
+      ]
+    }
+  },
+  "metadata": {
+    "last_updated": "2024-01-02T15:30:00Z",
+    "version": "1.0"
+  }
+}
+```
+
+---
+
+## 🚀 Deployment Options
+
+### Docker Compose
+```yaml
+version: '3.8'
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  public-bot:
+    build: .
+    command: python bots/public_bot.py
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+
+  private-bot:
+    build: .
+    command: python bots/private_bot.py
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+```
+
+### Production Deployment
+1. **Set up Redis cluster** for high availability
+2. **Configure monitoring** with Prometheus/Grafana
+3. **Set up backups** for user database
+4. **Configure logging** aggregation
+5. **Set up health checks** and alerting
+
+---
+
+## 📊 Monitoring & Metrics
+
+### System Statistics
+- Total users tracked
+- Active bans and strikes
+- Risk distribution
+- Message processing rate
+- System uptime and performance
+
+### Admin Dashboard
+Access via private bot commands to monitor:
+- User statistics
+- Risk assessments
+- Strike distributions
+- System health
+
+---
+
+## 🔒 Security & Compliance
+
+### Data Protection
+- User data stored locally in JSON format
+- No external data sharing
+- Configurable data retention
+- GDPR-compliant data handling
+
+### Access Control
+- Private admin bot for management commands
+- Token-based authentication
+- Command-level permissions
+
+### Audit Trail
+- Comprehensive logging of all actions
+- Strike and ban history
+- Admin command usage tracking
+
+---
+
+## 🛠️ Development
+
+### Adding New Features
+1. **Risk Factors**: Extend `engine/risk_assessment.py`
+2. **Admin Commands**: Add to `bots/private_bot.py`
+3. **Memory Fields**: Update `services/memory.py`
+4. **Tests**: Add to `tests.py`
+
+### Code Quality
+- Comprehensive test coverage
+- Type hints and documentation
+- Modular architecture
+- Error handling and logging
+
+---
+
+## 📝 License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new functionality
+4. Ensure all tests pass
+5. Submit a pull request
+
+---
+
+**Built with ❤️ for safer Telegram communities**
 ├── engine/
 │   ├── scoring.py             # User risk scoring with decay
 │   ├── clusters.py            # Multi-account network detection (BFS)
