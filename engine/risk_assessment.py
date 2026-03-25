@@ -1,9 +1,10 @@
 """Risk assessment engine - wraps scoring with risk levels and recommendations."""
 import logging
 from typing import Tuple, Dict
-from engine import scoring
-from engine import raid
+from engine import scoring, raid
+from engine import text_normalization
 from services import memory, ban_manager
+from services import correlator
 
 logger = logging.getLogger("risk_assessment")
 
@@ -43,9 +44,15 @@ def assess_user_risk(user_id: int, chat_id: int, text: str = "") -> Dict:
     # Get base score from engine
     base_score = scoring.compute_score(user_id)
     
-    # Normalize to 0-100
-    normalized_score = min(100.0, base_score)
-    
+    # Correlation checks
+    if correlator.detect_multi_group_user(user_id):
+        reasons.append("User active in multiple groups")
+        base_score += 10
+
+    if correlator.detect_campaign():
+        reasons.append("Campaign pattern detected")
+        base_score += 10
+
     reasons = []
     adjustments = 0
     

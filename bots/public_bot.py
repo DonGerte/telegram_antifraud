@@ -16,9 +16,12 @@ except ImportError:
     redis = None
 
 from engine import honeypot
+from engine import scoring as scoring_engine
+from engine import text_normalization
 from engine.heuristics import compute_signal
 from engine.risk_assessment import assess_user_risk, should_action_on_message
-from services import memory, strike_manager, ban_manager
+from services import memory, strike_manager, ban_manager, user_history
+from services import db
 import config
 
 # Redis queue names
@@ -110,14 +113,36 @@ def ingest(client, message):
     uid = message.from_user.id if message.from_user else None
     if not uid:
         return
-    
-    # Record message in memory
+
     text = message.text or message.caption or ""
+    normalized = text_normalization.normalize_text(text)
+    signals = text_normalization.extract_signals(text)
+
+    # Record message in memory cache
     memory.record_message(uid, text, message.chat.id)
-    
+
     # Get signal from heuristics
     sig_type, sig_value = compute_signal(message)
-    
+
+    # Store event in persistent history
+    user_history.record_event(
+        user_id=uid,
+        chat_id=message.chat.id,
+        signal=sig_type,
+        value=sig_value,
+        ts=message.date,
+    )
+
+    # Add scoring signal to in-memory score flow
+    scoring_engine.add_signal(
+        uid,
+        signal_type=sig_type,
+        value=sig_value,
+        chat=message.chat.id,
+        ts=message.date.timestamp(),
+    )
+
+
     # Assess overall risk
     risk_result = assess_user_risk(uid, message.chat.id, text)
     
