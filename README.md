@@ -105,6 +105,10 @@ Crea un archivo `.env` en la raíz del proyecto:
 PUBLIC_BOT_TOKEN=tu_token_del_bot_publico
 PRIVATE_BOT_TOKEN=tu_token_del_bot_privado
 REDIS_URL=redis://localhost:6379/0
+ADMIN_IDS=123456789,987654321
+API_KEY=your-secure-api-key-here
+API_ID=tu_api_id
+API_HASH=tu_api_hash
 ```
 
 ### 4. Iniciar Redis
@@ -133,7 +137,29 @@ python bots/public_bot.py
 python bots/private_bot.py
 ```
 
-### 6. Probar el Bot
+### 6. Ejecutar con Docker (Recomendado)
+```bash
+# Construir e iniciar todos los servicios
+docker-compose up --build
+
+# O en background
+docker-compose up -d --build
+
+# Ver logs
+docker-compose logs -f
+
+# Detener
+docker-compose down
+```
+
+Los servicios incluyen:
+- **Redis**: Cache y cola de mensajes
+- **PostgreSQL**: Base de datos persistente
+- **API**: FastAPI server en puerto 8000
+- **Public Bot**: Bot de monitoreo
+- **Private Bot**: Bot de administración
+
+### 7. Probar el Bot
 1. **Bot Público**: Envia `/start` en chat privado con el bot público
 2. **Bot Admin**: Envia `/start` en chat privado con el bot privado
 3. **En Grupo**: Agrega el bot público a un grupo como administrador
@@ -234,6 +260,18 @@ Tests cover:
 - ✅ Risk assessment engine
 - ✅ Scoring algorithms
 - ✅ Full system integration
+
+## 🔄 Continuous Integration
+
+The project includes GitHub Actions CI that runs on every push and PR:
+
+- **Linting**: flake8 for code quality
+- **Formatting**: black for consistent code style
+- **Imports**: isort for organized imports
+- **Testing**: Full test suite with Redis and PostgreSQL services
+- **Services**: Redis and PostgreSQL containers for integration tests
+
+CI ensures code quality and prevents regressions.
 
 ---
 

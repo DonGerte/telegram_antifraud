@@ -133,9 +133,27 @@ def process_action(raw):
 
 
 # Admin command handlers
+def _is_admin(user_id: int) -> bool:
+    return user_id in config.ADMIN_IDS
+
+
+def admin_required(func):
+    async def wrapper(client, message, *args, **kwargs):
+        user_id = message.from_user.id if message.from_user else 0
+        if not _is_admin(user_id):
+            await message.reply_text("❌ Access denied: admin only")
+            return
+        return await func(client, message, *args, **kwargs)
+
+    return wrapper
+
+
 @priv_bot.on_message(filters.command("start") & filters.private)
 async def start_command(client, message: Message):
     """Handle /start command"""
+    if not _is_admin(message.from_user.id if message.from_user else 0):
+        await message.reply_text("❌ Access denied: admin only")
+        return
     await message.reply_text(
         "🤖 **Telegram Antifraud Admin Bot**\n\n"
         "Available commands:\n"
@@ -154,6 +172,7 @@ async def start_command(client, message: Message):
 
 
 @priv_bot.on_message(filters.command("stats") & filters.private)
+@admin_required
 async def stats_command(client, message: Message):
     """Show system statistics"""
     try:
@@ -181,6 +200,7 @@ async def stats_command(client, message: Message):
 
 
 @priv_bot.on_message(filters.command("user") & filters.private)
+@admin_required
 async def user_command(client, message: Message):
     """Get user information"""
     try:
@@ -218,6 +238,7 @@ async def user_command(client, message: Message):
 
 
 @priv_bot.on_message(filters.command("ban") & filters.private)
+@admin_required
 async def ban_command(client, message: Message):
     """Ban a user"""
     try:
@@ -241,6 +262,7 @@ async def ban_command(client, message: Message):
 
 
 @priv_bot.on_message(filters.command("unban") & filters.private)
+@admin_required
 async def unban_command(client, message: Message):
     """Unban a user"""
     try:
@@ -262,6 +284,7 @@ async def unban_command(client, message: Message):
 
 
 @priv_bot.on_message(filters.command("strike") & filters.private)
+@admin_required
 async def strike_command(client, message: Message):
     """Add strike to user"""
     try:
@@ -288,6 +311,7 @@ async def strike_command(client, message: Message):
 
 
 @priv_bot.on_message(filters.command("forgive") & filters.private)
+@admin_required
 async def forgive_command(client, message: Message):
     """Remove strike from user"""
     try:
@@ -310,6 +334,7 @@ async def forgive_command(client, message: Message):
 
 
 @priv_bot.on_message(filters.command("risk") & filters.private)
+@admin_required
 async def risk_command(client, message: Message):
     """Assess user risk"""
     try:
@@ -336,6 +361,7 @@ async def risk_command(client, message: Message):
 
 
 @priv_bot.on_message(filters.command("containment") & filters.private)
+@admin_required
 async def containment_command(client, message: Message):
     """Set containment mode for a chat"""
     try:
@@ -371,6 +397,7 @@ async def containment_command(client, message: Message):
 
 
 @priv_bot.on_message(filters.command("whitelist") & filters.private)
+@admin_required
 async def whitelist_command(client, message: Message):
     """Add user to whitelist"""
     try:
@@ -392,6 +419,7 @@ async def whitelist_command(client, message: Message):
 
 
 @priv_bot.on_message(filters.command("blacklist") & filters.private)
+@admin_required
 async def blacklist_command(client, message: Message):
     """Add user to blacklist"""
     try:
@@ -413,6 +441,7 @@ async def blacklist_command(client, message: Message):
 
 
 @priv_bot.on_message(filters.command("test") & filters.private)
+@admin_required
 async def test_command(client, message: Message):
     """Run system tests"""
     await message.reply_text("🧪 Running system tests...")

@@ -19,7 +19,7 @@ def test_imports():
     try:
         from services import memory, strike_manager, ban_manager
         from engine import scoring
-        print("✓ All imports successful")
+        print("All imports successful")
         return True
     except ImportError as e:
         print(f"✗ Import error: {e}")
@@ -29,12 +29,16 @@ def test_imports():
 def test_risk_assessment():
     """Test risk assessment functionality"""
     try:
+        from services import db
+        db.init_db()
+
         # Test basic risk assessment
         risk = assess_user_risk(12345, -100123, "hello world")
         assert 'level' in risk
         assert 'score' in risk
         assert isinstance(risk['level'], str)
-        print("✓ Risk assessment working")
+
+        print("Risk assessment working")
         return True
     except Exception as e:
         print(f"✗ Risk assessment error: {e}")
@@ -45,6 +49,9 @@ def test_scoring():
     """Test scoring system"""
     try:
         from engine import scoring
+        from services import db
+
+        db.init_db()
 
         # Test adding signals
         scoring.add_signal(12345, "test", 0.5, -100123)
@@ -52,7 +59,7 @@ def test_scoring():
         assert isinstance(score, float)
         assert score >= 0
 
-        print("✓ Scoring system working")
+        print("Scoring system working")
         return True
     except Exception as e:
         print(f"✗ Scoring error: {e}")
@@ -69,23 +76,46 @@ def test_strike_system():
         assert hasattr(strike_manager.StrikeAction, 'MUTE')
         assert hasattr(strike_manager.StrikeAction, 'BAN')
 
-        print("✓ Strike system structure correct")
+        print("Strike system structure correct")
         return True
     except Exception as e:
         print(f"✗ Strike system error: {e}")
         return False
 
 
+def test_security_config():
+    """Test API key and admin IDs config values are set"""
+    try:
+        import config
+
+        assert isinstance(config.ADMIN_IDS, list), "ADMIN_IDS debe ser lista"
+        assert len(config.ADMIN_IDS) > 0, "ADMIN_IDS no debe estar vacío"
+
+        if not config.API_KEY or not config.API_KEY.strip():
+            print("API_KEY no configurada - omitiendo verificación estricta (usa run.py para configurar)")
+            return True
+
+        assert isinstance(config.API_KEY, str), "API_KEY debe ser cadena"
+        assert config.API_KEY.strip() != "", "API_KEY no debe estar vacío"
+
+        print("Security config OK")
+        return True
+    except Exception as e:
+        print(f"Security config error: {e}")
+        return False
+
+
 def run_tests():
     """Run all tests"""
-    print("🧪 Running Telegram Antifraud System Tests")
+    print("Running Telegram Antifraud System Tests")
     print("=" * 50)
 
     tests = [
         test_imports,
         test_risk_assessment,
         test_scoring,
-        test_strike_system
+        test_strike_system,
+        test_security_config
     ]
 
     passed = 0
@@ -98,7 +128,7 @@ def run_tests():
     print(f"\nResults: {passed}/{total} tests passed")
 
     if passed == total:
-        print("🎉 All tests passed!")
+        print("All tests passed!")
         return True
     else:
         print("❌ Some tests failed!")

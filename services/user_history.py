@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 
 from services import db
+from sqlalchemy import text
 
 STORE_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "event_store.json")
 
@@ -72,7 +73,7 @@ def get_recent_events(window_minutes: int = 60) -> List[Dict]:
     if db.is_db_available():
         with db.SessionLocal() as session:
             results = session.execute(
-                "SELECT user_id, chat_id, signal, value, ts, raw_text FROM user_events WHERE ts >= :threshold",
+                text("SELECT user_id, chat_id, signal, value, ts, raw_text FROM user_events WHERE ts >= :threshold"),
                 {"threshold": threshold},
             ).all()
         return [

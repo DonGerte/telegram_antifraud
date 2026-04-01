@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timedelta
 from collections import Counter
 
+from sqlalchemy import text as sql_text
 from services.user_history import get_user_events
 from services.db import get_events_by_user
 
@@ -32,7 +33,8 @@ def detect_campaign(trigger_window_seconds: int = 60, threshold: int = 3) -> boo
     from services.db import SessionLocal, UserEvent
     with SessionLocal() as db:
         rows = db.execute(
-            "SELECT user_id, raw_text FROM user_events WHERE ts >= :t", {"t": start}
+            sql_text("SELECT user_id, raw_text FROM user_events WHERE ts >= :t"),
+            {"t": start}
         ).all()
     for user_id, raw_text in rows:
         if not raw_text:
@@ -40,9 +42,9 @@ def detect_campaign(trigger_window_seconds: int = 60, threshold: int = 3) -> boo
         normalized = raw_text.strip().lower()
         text_counter[normalized] += 1
 
-    for text, count in text_counter.items():
+    for phrase, count in text_counter.items():
         if count >= threshold:
-            logger.warning(f"Campaign detected: '{text}' occurred {count} times in last {trigger_window_seconds}s")
+            logger.warning(f"Campaign detected: '{phrase}' occurred {count} times in last {trigger_window_seconds}s")
             return True
 
     return False

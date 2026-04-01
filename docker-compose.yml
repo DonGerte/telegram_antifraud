@@ -8,41 +8,60 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    command: redis-server --appendonly yes
 
-  public_bot:
-    build: .
-    command: python bots/public_bot.py
-    depends_on:
-      - redis
-    env_file: .env
+  postgres:
+    image: postgres:15-alpine
     restart: unless-stopped
+    environment:
+      POSTGRES_DB: telegram_antifraud
+      POSTGRES_USER: antifraud
+      POSTGRES_PASSWORD: antifraud_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
-  worker:
+  api:
     build: .
-    command: python engine/worker.py
-    depends_on:
-      - redis
-    env_file: .env
-    restart: unless-stopped
-
-  webhook_api:
-    build: .
-    command: uvicorn bots.webhook:app --host 0.0.0.0 --port 8000
-    depends_on:
-      - redis
-    env_file: .env
     restart: unless-stopped
     ports:
       - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://antifraud:antifraud_pass@postgres/telegram_antifraud
+      - REDIS_URL=redis://redis:6379/0
+    env_file: .env
+    depends_on:
+      - postgres
+      - redis
+    command: uvicorn api.app:app --host 0.0.0.0 --port 8000
+
+  public_bot:
+    build: .
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://antifraud:antifraud_pass@postgres/telegram_antifraud
+    env_file: .env
+    depends_on:
+      - redis
+      - postgres
+    command: python bots/public_bot.py
 
   private_bot:
     build: .
-    command: python bots/private_bot.py
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://antifraud:antifraud_pass@postgres/telegram_antifraud
+    env_file: .env
     depends_on:
       - redis
-    env_file: .env
-    restart: unless-stopped
+      - postgres
+    command: python bots/private_bot.py
 
 volumes:
   redis_data:
+    driver: local
+  postgres_data:
     driver: local

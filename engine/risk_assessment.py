@@ -43,19 +43,20 @@ def assess_user_risk(user_id: int, chat_id: int, text: str = "") -> Dict:
     
     # Get base score from engine
     base_score = scoring.compute_score(user_id)
-    
-    # Correlation checks
-    if correlator.detect_multi_group_user(user_id):
-        reasons.append("User active in multiple groups")
-        base_score += 10
-
-    if correlator.detect_campaign():
-        reasons.append("Campaign pattern detected")
-        base_score += 10
+    normalized_score = float(base_score)
 
     reasons = []
     adjustments = 0
-    
+
+    # Correlation checks
+    if correlator.detect_multi_group_user(user_id):
+        reasons.append("User active in multiple groups")
+        adjustments += 10
+
+    if correlator.detect_campaign():
+        reasons.append("Campaign pattern detected")
+        adjustments += 10
+
     # Check for raid
     if raid.detect_raid(chat_id):
         reasons.append("Chat is under raid")
