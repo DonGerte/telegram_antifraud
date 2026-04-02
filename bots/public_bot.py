@@ -23,6 +23,13 @@ from engine.risk_assessment import assess_user_risk, should_action_on_message
 from services import memory, strike_manager, ban_manager, user_history
 from services import db
 import config
+from pathlib import Path
+
+# Ensure sessions directory is consistent across bot execution contexts
+BASE_DIR = Path(__file__).resolve().parent
+ROOT_DIR = BASE_DIR.parent
+SESSION_DIR = ROOT_DIR / "sessions"
+SESSION_DIR.mkdir(parents=True, exist_ok=True)
 
 # Redis queue names
 IN_QUEUE = "data_bus"
@@ -44,10 +51,19 @@ if redis and config.REDIS_URL:
         logger.warning(f"Redis no disponible: {e}")
         redis_client = None
 
-bot = Client("public_bot", 
-             api_id=config.API_ID,
-             api_hash=config.API_HASH,
-             bot_token=config.PUBLIC_BOT_TOKEN)
+# Validate configuration before starting
+if not config.PUBLIC_BOT_TOKEN:
+    logger.error("PUBLIC_BOT_TOKEN is not configured. Set it in .env")
+    raise RuntimeError("PUBLIC_BOT_TOKEN is required")
+
+bot = Client(
+    "public_bot",
+    api_id=config.API_ID,
+    api_hash=config.API_HASH,
+    bot_token=config.PUBLIC_BOT_TOKEN,
+    in_memory=True,
+    workdir=str(SESSION_DIR)
+)
 
 def enqueue_action(action, payload):
     event = {"action": action, **payload}
@@ -61,21 +77,23 @@ def enqueue_action(action, payload):
         logger.error(f"failed to enqueue action: {e}")
 
 
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+
 @bot.on_message(filters.command("start"))
 async def start_command(client, message):
     """Handle /start command in chats"""
     logger.info(f"/start received in chat {message.chat.id} by user {message.from_user.id if message.from_user else 'unknown'}")
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📊 Status", callback_data="public_status")],
+        [InlineKeyboardButton("🩺 Health", callback_data="public_health")],
+        [InlineKeyboardButton("❓ Help", callback_data="public_help")]
+    ])
+
     await message.reply_text(
         "🤖 **Telegram Antifraud Bot**\n\n"
-        "Este bot monitorea mensajes en grupos para detectar spam, raids y comportamiento malicioso.\n\n"
-        "Para usar el bot:\n"
-        "1. Agrega el bot a un grupo como administrador\n"
-        "2. El bot analizará automáticamente todos los mensajes\n"
-        "3. Usa el bot admin para gestionar usuarios y ver estadísticas\n\n"
-        "Comandos disponibles:\n"
-        "/help - Mostrar esta ayuda\n"
-        "/status - Estado del bot\n\n"
-        "Para comandos administrativos, usa el bot privado."
+        "Bot de monitoreo para grupos. Usa los botones para ver estado y salud.\n",
+        reply_markup=keyboard
     )
 
 
@@ -84,6 +102,21 @@ async def help_command(client, message):
     """Handle /help command"""
     logger.info(f"/help received in chat {message.chat.id} by user {message.from_user.id if message.from_user else 'unknown'}")
     await start_command(client, message)
+
+
+@bot.on_callback_query()
+async def callback_query_handler(client, callback_query):
+    data = callback_query.data
+    if data == "public_status":
+        await callback_query.message.reply_text("Ejecutando /status...")
+        await status_command(client, callback_query.message)
+    elif data == "public_health":
+        await callback_query.message.reply_text("Ejecutando /health...")
+        await health_command(client, callback_query.message)
+    elif data == "public_help":
+        await callback_query.message.reply_text("Ejecutando /help...")
+        await help_command(client, callback_query.message)
+    await callback_query.answer()
 
 
 @bot.on_message(filters.command("status"))
@@ -106,6 +139,30 @@ async def status_command(client, message):
         await message.reply_text(status_text)
     except Exception as e:
         await message.reply_text(f"❌ Error obteniendo status: {e}")
+
+
+@bot.on_message(filters.command("ping"))
+async def ping_command(client, message):
+    logger.info(f"/ping received from {message.chat.id}")
+    await message.reply_text("🏓 pong")
+
+
+@bot.on_message(filters.command("health"))
+async def health_check(client, message):
+    try:
+        store = memory.load_store()
+        users = store.get("users", {})
+
+        health_text = (
+            "🩺 **Health Check**\n\n"
+            f"Redis: {'Conectado' if redis_client else 'No disponible'}\n"
+            f"Usuarios almacenados: {len(users)}\n"
+            f"Admin config: {config.ADMIN_IDS}\n"
+            f"Modo: {'Producción' if config.PUBLIC_BOT_TOKEN else 'Desarrollo'}\n"
+        )
+        await message.reply_text(health_text)
+    except Exception as e:
+        await message.reply_text(f"❌ Health check failed: {e}")
 
 
 @bot.on_message(filters.group)

@@ -5,6 +5,7 @@ import time
 import json
 import sys
 import os
+from datetime import datetime
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -31,12 +32,65 @@ if redis and config.REDIS_URL:
         log.warning(f"Redis no disponible para bot privado: {e}")
         _redis = None
 
-priv_bot = Client("private_bot",
-               api_id=config.API_ID,
-               api_hash=config.API_HASH,
-               bot_token=config.PRIVATE_BOT_TOKEN)
+# Validate configuration for private bot
+if not config.PRIVATE_BOT_TOKEN:
+    log.error("PRIVATE_BOT_TOKEN is not configured. Set it in .env")
+    raise RuntimeError("PRIVATE_BOT_TOKEN is required")
+
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+ROOT_DIR = BASE_DIR.parent
+SESSION_DIR = ROOT_DIR / "sessions"
+SESSION_DIR.mkdir(parents=True, exist_ok=True)
+SESSION_NAME = "private_bot"
+
+priv_bot = Client(
+    SESSION_NAME,
+    api_id=config.API_ID,
+    api_hash=config.API_HASH,
+    bot_token=config.PRIVATE_BOT_TOKEN,
+    in_memory=True,
+    workdir=str(SESSION_DIR)
+)
 
 ACTION_QUEUE = "action_bus"
+
+
+def _cleanup_stale_session():
+    """Remove stale session lock files for Pyrogram if present."""
+    for suffix in ['.session', '.session-journal', '.session-wal', '.session-shm']:
+        conn_path = SESSION_DIR / f"{SESSION_NAME}{suffix}"
+        if conn_path.exists():
+            try:
+                conn_path.unlink()
+                log.info(f"Stale session file removed: {conn_path}")
+            except Exception as e:
+                log.warning(f"No se pudo eliminar session stale {conn_path}: {e}")
+
+
+def _safe_run_client(client: Client, max_retries=3, sleep_s=2):
+    """Run client with retries on database lock (Pyrogram session file)."""
+    _cleanup_stale_session()
+    for attempt in range(1, max_retries + 1):
+        try:
+            client.run()
+            return
+        except Exception as e:
+            msg = str(e).lower()
+            if client and getattr(client, 'is_connected', False):
+                try:
+                    client.stop()
+                except Exception:
+                    pass
+
+            if ("database is locked" in msg or "unable to open database file" in msg) and attempt < max_retries:
+                log.warning(f"Database lock/error en session (intento {attempt}/{max_retries}). Reintentando en {sleep_s} segundos...")
+                time.sleep(sleep_s)
+                sleep_s *= 2
+                continue
+            log.error(f"Failed to run private bot: {e}")
+            raise
 
 
 
@@ -134,7 +188,9 @@ def process_action(raw):
 
 # Admin command handlers
 def _is_admin(user_id: int) -> bool:
-    return user_id in config.ADMIN_IDS
+    admin = user_id in config.ADMIN_IDS
+    log.debug(f"admin check: user_id={user_id}, admin={admin}, configured={config.ADMIN_IDS}")
+    return admin
 
 
 def admin_required(func):
@@ -151,24 +207,62 @@ def admin_required(func):
 @priv_bot.on_message(filters.command("start") & filters.private)
 async def start_command(client, message: Message):
     """Handle /start command"""
-    if not _is_admin(message.from_user.id if message.from_user else 0):
-        await message.reply_text("❌ Access denied: admin only")
+    user_id = message.from_user.id if message.from_user else 0
+    log.info(f"/start from {user_id}, config admins={config.ADMIN_IDS}")
+    if not _is_admin(user_id):
+        await message.reply_text(
+            f"❌ Acceso denegado: administrador sólo.\n"
+            f"Tu ID: {user_id}\n"
+            f"Admin IDs configurados: {config.ADMIN_IDS}\n"
+            "Si tú eres admin, actualiza ADMIN_IDS en .env y reinicia el bot."
+        )
         return
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("👤 Who am I", callback_data="private_whoami")],
+        [InlineKeyboardButton("🔨 Ban user", callback_data="private_ban")],
+        [InlineKeyboardButton("✅ Unban user", callback_data="private_unban")],
+        [InlineKeyboardButton("📋 List banned", callback_data="private_list_bans")],
+        [InlineKeyboardButton("📊 Stats", callback_data="private_stats")]
+    ])
+
     await message.reply_text(
         "🤖 **Telegram Antifraud Admin Bot**\n\n"
-        "Available commands:\n"
-        "/stats - Show system statistics\n"
-        "/user <id> - Get user information\n"
-        "/ban <id> [reason] - Ban user\n"
-        "/unban <id> - Unban user\n"
-        "/strike <id> [reason] - Add strike to user\n"
-        "/forgive <id> - Remove strike from user\n"
-        "/risk <id> - Assess user risk\n"
-        "/containment <chat_id> <mode> - Set containment mode\n"
-        "/whitelist <id> - Add user to whitelist\n"
-        "/blacklist <id> - Add user to blacklist\n"
-        "/test - Run system tests"
+        "Usa los botones para gestionar usuarios.\n"
+        "Para ejecutar con texto: /ban <id|@username> <reason>, /unban <id|@username>\n",
+        reply_markup=keyboard
     )
+
+
+@priv_bot.on_callback_query()
+async def private_callback_query(client, callback_query):
+    user_id = callback_query.from_user.id if callback_query.from_user else 0
+    is_admin = _is_admin(user_id)
+    log.info(f"callback_query from {user_id}: is_admin={is_admin}, ADMIN_IDS={config.ADMIN_IDS}")
+
+    if not is_admin:
+        await callback_query.answer(
+            f"❌ Acceso denegado (solo admin). ID actual: {user_id}. ADMIN_IDS: {config.ADMIN_IDS}",
+            show_alert=True
+        )
+        return
+
+    data = callback_query.data
+    if data == "private_whoami":
+        await callback_query.message.reply_text(f"Tu ID: {user_id}")
+    elif data == "private_ban":
+        await callback_query.message.reply_text("Envia /ban <id|@username> <motivo>")
+    elif data == "private_unban":
+        await callback_query.message.reply_text("Envia /unban <id|@username>")
+    elif data == "private_list_bans":
+        await list_bans_command(client, callback_query.message)
+    elif data == "private_stats":
+        await stats_command(client, callback_query.message)
+    else:
+        await callback_query.answer("❌ Acción desconocida")
+        return
+
+    await callback_query.answer("✅ Acción ejecutada")
 
 
 @priv_bot.on_message(filters.command("stats") & filters.private)
@@ -176,14 +270,13 @@ async def start_command(client, message: Message):
 async def stats_command(client, message: Message):
     """Show system statistics"""
     try:
-        store = memory.load_store()
-        users = store.get("users", {})
-        metadata = store.get("metadata", {})
-
-        total_users = len(users)
-        banned_users = sum(1 for u in users.values() if u.get("banned", False))
-        strikes_given = sum(u.get("strikes", 0) for u in users.values())
-        total_messages = sum(u.get("message_count", 0) for u in users.values())
+        from services.db import SessionLocal, UserProfile, Ban, Message
+        with SessionLocal() as db:
+            total_users = db.query(UserProfile).count()
+            banned_users = db.query(UserProfile).filter(UserProfile.banned == 1).count()
+            total_strikes = db.query(UserProfile).with_entities(UserProfile.strikes).all()
+            strikes_given = sum(s[0] for s in total_strikes)
+            total_messages = db.query(Message).count()
 
         stats_text = (
             "📊 **System Statistics**\n\n"
@@ -191,7 +284,7 @@ async def stats_command(client, message: Message):
             f"🚫 Banned Users: {banned_users}\n"
             f"⚡ Total Strikes: {strikes_given}\n"
             f"💬 Total Messages: {total_messages}\n"
-            f"🕒 Last Updated: {metadata.get('last_updated', 'Never')}\n"
+            f"🕒 Last Updated: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
         )
 
         await message.reply_text(stats_text)
@@ -244,19 +337,40 @@ async def ban_command(client, message: Message):
     try:
         args = message.text.split()[1:]
         if not args:
-            await message.reply_text("Usage: /ban <user_id> [reason]")
+            await message.reply_text("Usage: /ban <user_id|@username> [reason]")
             return
 
-        user_id = int(args[0])
+        target = args[0]
         reason = " ".join(args[1:]) if len(args) > 1 else "Manual ban"
 
-        success = ban_manager.ban_user(user_id, reason)
-        if success:
-            await message.reply_text(f"✅ User {user_id} banned: {reason}")
+        user_id = None
+        username = None
+
+        if target.startswith("@"):
+            username = target
+            try:
+                user_obj = await client.get_users(target)
+                user_id = user_obj.id
+            except Exception as e:
+                await message.reply_text(f"❌ No se pudo resolver el usuario {target}: {e}")
+                return
         else:
-            await message.reply_text(f"❌ Failed to ban user {user_id}")
-    except ValueError:
-        await message.reply_text("❌ Invalid user ID")
+            try:
+                user_id = int(target)
+            except ValueError:
+                await message.reply_text("❌ Invalid user ID or username")
+                return
+
+        admin_user = message.from_user
+        admin_id = admin_user.id if admin_user else None
+        admin_username = admin_user.username if admin_user else None
+
+        ban_manager.ban_user(user_id, reason, banned_by_id=admin_id, banned_by_username=admin_username)
+        await message.reply_text(
+            f"🚫 Banned user: {user_id} {username or ''}\nMotivo: {reason}\n"
+            f"Ban hecho por: @{admin_username or 'unknown'} ({admin_id})\n"
+            f"Uso: /unban {user_id} para desbanear"
+        )
     except Exception as e:
         await message.reply_text(f"❌ Error: {e}")
 
@@ -268,19 +382,67 @@ async def unban_command(client, message: Message):
     try:
         args = message.text.split()[1:]
         if not args:
-            await message.reply_text("Usage: /unban <user_id>")
+            await message.reply_text("Usage: /unban <user_id|@username>")
             return
 
-        user_id = int(args[0])
-        success = ban_manager.unban_user(user_id)
-        if success:
-            await message.reply_text(f"✅ User {user_id} unbanned")
+        target = args[0]
+
+        if target.startswith("@"):
+            try:
+                user = await client.get_users(target)
+                user_id = user.id
+            except Exception as e:
+                await message.reply_text(f"❌ No se pudo resolver el usuario {target}: {e}")
+                return
         else:
-            await message.reply_text(f"❌ Failed to unban user {user_id}")
-    except ValueError:
-        await message.reply_text("❌ Invalid user ID")
+            try:
+                user_id = int(target)
+            except ValueError:
+                await message.reply_text("❌ Invalid user ID or username")
+                return
+
+        ban_manager.unban_user(user_id)
+        await message.reply_text(f"✅ User {user_id} unbanned")
     except Exception as e:
         await message.reply_text(f"❌ Error: {e}")
+
+
+@priv_bot.on_message(filters.command("listbans") & filters.private)
+@admin_required
+async def list_bans_command(client, message: Message):
+    """List banned users"""
+    try:
+        from services.db import SessionLocal, Ban
+        with SessionLocal() as db:
+            bans = db.query(Ban).order_by(Ban.banned_at.desc()).all()
+            if not bans:
+                await message.reply_text("✅ No hay usuarios baneados actualmente.")
+                return
+
+            lines = []
+            for ban in bans:
+                by = f"@(unknown)" if not ban.banned_by else f"ID {ban.banned_by}"
+                lines.append(
+                    f"ID {ban.user_id} (razón: {ban.reason or 'sin motivo'}, baneado por: {by})"
+                )
+
+            response = "📛 Usuarios baneados:\n" + "\n".join(lines)
+            await message.reply_text(response)
+    except Exception:
+        banned = memory.get_banned_users()
+        if not banned:
+            await message.reply_text("✅ No hay usuarios baneados actualmente.")
+            return
+
+        lines = []
+        for uid, u in banned.items():
+            by = u.get("ban_by") or u.get("ban_by_username") or u.get("ban_by_id") or "unknown"
+            lines.append(
+                f"ID {uid} (razón: {u.get('ban_reason', 'sin motivo')}, baneado por: {by})"
+            )
+
+        response = "📛 Usuarios baneados:\n" + "\n".join(lines)
+        await message.reply_text(response)
 
 
 @priv_bot.on_message(filters.command("strike") & filters.private)
@@ -440,6 +602,50 @@ async def blacklist_command(client, message: Message):
         await message.reply_text(f"❌ Error: {e}")
 
 
+@priv_bot.on_message(filters.command("ping") & filters.private)
+async def ping_command(client, message: Message):
+    """Ping admin bot"""
+    user_id = message.from_user.id if message.from_user else 0
+    log.info(f"/ping from {user_id}")
+    await message.reply_text(f"🏓 pong (user: {user_id})")
+
+
+@priv_bot.on_message(filters.command("whoami") & filters.private)
+async def whoami_command(client, message: Message):
+    user_id = message.from_user.id if message.from_user else 0
+    is_admin = _is_admin(user_id)
+    bot_name = None
+    try:
+        bot_name = priv_bot.get_me().username if priv_bot.is_connected else 'disconnected'
+    except Exception:
+        bot_name = 'unknown'
+
+    await message.reply_text(
+        f"Tu ID: {user_id}\n"
+        f"ADMIN_IDS configurados: {config.ADMIN_IDS}\n"
+        f"¿Es admin?: {is_admin}\n"
+        f"Bot username: {bot_name}"
+    )
+
+
+@priv_bot.on_message(filters.command("health") & filters.private)
+@admin_required
+async def health_command(client, message: Message):
+    """Health check for admin bot"""
+    try:
+        store = memory.load_store()
+        users = store.get("users", {})
+        health_text = (
+            "🩺 **Admin Bot Health**\n\n"
+            f"Redis: {'Conectado' if _redis else 'No disponible'}\n"
+            f"Usuarios almacenados: {len(users)}\n"
+            f"Admin IDs: {config.ADMIN_IDS}\n"
+        )
+        await message.reply_text(health_text)
+    except Exception as e:
+        await message.reply_text(f"❌ Health check failed: {e}")
+
+
 @priv_bot.on_message(filters.command("test") & filters.private)
 @admin_required
 async def test_command(client, message: Message):
@@ -475,8 +681,10 @@ async def test_command(client, message: Message):
 
 def main():
     if not _redis:
-        log.error("redis not configured, cannot consume actions")
-        return
+        log.warning("Redis no configurado: la cola de acciones estará deshabilitada, el bot seguirá respondiendo comandos.")
+        while True:
+            time.sleep(5)
+
     log.info("private bot listening for actions")
     while True:
         try:
@@ -551,7 +759,13 @@ if __name__ == "__main__":
     action_thread = threading.Thread(target=main, daemon=True)
     action_thread.start()
 
+    # Run bot in blocking mode so it stays online and answers commands
+    log.info("Attempting to start private bot...")
     try:
-        priv_bot.start()
-    finally:
-        priv_bot.stop()
+        _safe_run_client(priv_bot)
+        log.info("Private bot stopped")
+    except Exception as e:
+        import traceback
+        log.error(f"Failed to run private bot: {e}", exc_info=True)
+        traceback.print_exc()
+        raise
