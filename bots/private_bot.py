@@ -18,7 +18,7 @@ except ImportError:
 import config
 from engine import raid, shadow_mod
 from engine.logger import get_logger, log_event
-from services import memory, strike_manager, ban_manager
+from services import memory, strike_manager, ban_manager, db
 from engine.risk_assessment import assess_user_risk, RiskLevel
 
 log = get_logger("private_bot")
@@ -31,6 +31,13 @@ if redis and config.REDIS_URL:
     except Exception as e:
         log.warning(f"Redis no disponible para bot privado: {e}")
         _redis = None
+
+# Ensure DB schema is applied
+try:
+    db.init_db()
+    log.info("Database initialization/migration checked")
+except Exception as e:
+    log.warning(f"Database init failed: {e}")
 
 # Validate configuration for private bot
 if not config.PRIVATE_BOT_TOKEN:
@@ -316,7 +323,7 @@ async def user_command(client, message: Message):
             f"📝 Messages: {profile.get('message_count', 0)}\n"
             f"⚡ Strikes: {profile.get('strikes', 0)}\n"
             f"🚫 Banned: {'Yes' if profile.get('banned', False) else 'No'}\n"
-            f"🎯 Risk Level: {risk['level'].value}\n"
+            f"🎯 Risk Level: {risk['level']}\n"
             f"📊 Risk Score: {risk['score']:.2f}\n"
             f"🏷️ Tags: {', '.join(profile.get('tags', []))}\n"
             f"🕒 First Seen: {profile.get('first_seen', 'Unknown')}\n"
@@ -510,9 +517,9 @@ async def risk_command(client, message: Message):
 
         risk_text = (
             f"🎯 **Risk Assessment for {user_id}**\n\n"
-            f"📊 Risk Level: {risk['level'].value}\n"
+            f"📊 Risk Level: {risk['level']}\n"
             f"🔢 Risk Score: {risk['score']:.2f}\n"
-            f"📝 Factors: {', '.join(risk.get('factors', []))}\n"
+            f"📝 Reasons: {', '.join(risk.get('reasons', [])) or 'None'}\n"
         )
 
         await message.reply_text(risk_text)

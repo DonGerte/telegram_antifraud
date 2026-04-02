@@ -20,8 +20,7 @@ from engine import scoring as scoring_engine
 from engine import text_normalization
 from engine.heuristics import compute_signal
 from engine.risk_assessment import assess_user_risk, should_action_on_message
-from services import memory, strike_manager, ban_manager, user_history
-from services import db
+from services import memory, strike_manager, ban_manager, user_history, db
 import config
 from pathlib import Path
 
@@ -50,6 +49,13 @@ if redis and config.REDIS_URL:
     except Exception as e:
         logger.warning(f"Redis no disponible: {e}")
         redis_client = None
+
+# Ensure DB schema is applied
+try:
+    db.init_db()
+    logger.info("Database initialization/migration checked")
+except Exception as e:
+    logger.warning(f"Database init failed: {e}")
 
 # Validate configuration before starting
 if not config.PUBLIC_BOT_TOKEN:
