@@ -2,7 +2,7 @@
 import hashlib
 import logging
 from typing import Optional, Dict
-from services.memory import is_banned, get_recent_messages, record_message
+from services.memory import is_banned, get_recent_messages, record_message, ban_user as memory_ban_user, unban_user as memory_unban_user
 
 logger = logging.getLogger("ban_manager")
 
@@ -65,3 +65,13 @@ def detect_raid_pattern(chat_id: int, user_ids: list, time_window: int = 300) ->
         "new_user_count": 0,
         "pattern_score": 0.0
     }
+
+
+def ban_user(user_id: int, reason: str = "", banned_by_id: int = None, banned_by_username: str = None):
+    """Ban a user via memory module and record who banned them."""
+    return memory_ban_user(user_id, reason, banned_by_id=banned_by_id, banned_by_username=banned_by_username)
+
+
+def unban_user(user_id: int) -> bool:
+    """Unban a user via memory module."""
+    return memory_unban_user(user_id)

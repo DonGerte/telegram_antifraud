@@ -5,5 +5,8 @@ __pycache__/
 .env.*
 *.session
 *.session-journal
+*.lock
+.*.lock
 run.py
 requirements-simple.txt
+.bot_pids

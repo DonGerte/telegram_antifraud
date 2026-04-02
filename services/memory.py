@@ -110,7 +110,7 @@ def get_strikes(user_id: int) -> int:
     return user.get("strikes", 0) if user else 0
 
 
-def ban_user(user_id: int, reason: str = ""):
+def ban_user(user_id: int, reason: str = "", banned_by_id: int = None, banned_by_username: str = None):
     """Ban a user."""
     store = load_store()
     user_key = str(user_id)
@@ -123,6 +123,8 @@ def ban_user(user_id: int, reason: str = ""):
             "banned": True,
             "ban_reason": reason,
             "ban_time": time.time(),
+            "banned_by_id": banned_by_id,
+            "banned_by_username": banned_by_username,
             "first_seen": time.time(),
             "last_seen": time.time()
         }
@@ -130,8 +132,24 @@ def ban_user(user_id: int, reason: str = ""):
         store["users"][user_key]["banned"] = True
         store["users"][user_key]["ban_reason"] = reason
         store["users"][user_key]["ban_time"] = time.time()
+        store["users"][user_key]["banned_by_id"] = banned_by_id
+        store["users"][user_key]["banned_by_username"] = banned_by_username
     
     save_store(store)
+
+
+def unban_user(user_id: int) -> bool:
+    """Unban a user."""
+    store = load_store()
+    user_key = str(user_id)
+    
+    if user_key in store["users"]:
+        store["users"][user_key]["banned"] = False
+        store["users"][user_key].pop("ban_reason", None)
+        store["users"][user_key].pop("ban_time", None)
+        save_store(store)
+        return True
+    return False
 
 
 def is_banned(user_id: int) -> bool:
