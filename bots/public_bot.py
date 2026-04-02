@@ -30,6 +30,51 @@ ROOT_DIR = BASE_DIR.parent
 SESSION_DIR = ROOT_DIR / "sessions"
 SESSION_DIR.mkdir(parents=True, exist_ok=True)
 
+# Lock file to prevent multiple instances
+LOCK_FILE = ROOT_DIR / ".public_bot.lock"
+
+
+def _acquire_lock():
+    """Acquire exclusive lock to prevent multiple instances."""
+    import platform
+    
+    if platform.system() == "Windows":
+        # Windows doesn't support fcntl, use simple file check
+        if LOCK_FILE.exists():
+            try:
+                age = time.time() - LOCK_FILE.stat().st_mtime
+                if age < 300:  # 5 minutes
+                    raise RuntimeError("Another instance of public_bot is already running")
+            except OSError:
+                pass
+        LOCK_FILE.write_text(str(os.getpid()))
+    else:
+        # Unix: use fcntl for proper locking
+        import fcntl
+        lock_fd = open(LOCK_FILE, 'w')
+        try:
+            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            lock_fd.write(str(os.getpid()))
+            lock_fd.flush()
+            return lock_fd
+        except IOError:
+            raise RuntimeError("Another instance of public_bot is already running")
+    
+    return None
+
+
+def _release_lock(lock_fd=None):
+    """Release lock file."""
+    try:
+        if lock_fd:
+            import fcntl
+            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
+            lock_fd.close()
+        if LOCK_FILE.exists():
+            LOCK_FILE.unlink()
+    except Exception:
+        pass
+
 # Redis queue names
 IN_QUEUE = "data_bus"
 OUT_QUEUE = "action_bus"
@@ -172,13 +217,27 @@ async def health_check(client, message):
 
 
 @bot.on_message(filters.group)
-def ingest(client, message):
+async def ingest(client, message):
+    """Process incoming messages in group chats."""
     uid = message.from_user.id if message.from_user else None
     if not uid:
         return
 
     text = message.text or message.caption or ""
-    normalized = text_normalization.normalize_text(text)
+    
+    # Deduplication: Skip if we've seen this exact message in the last 2 seconds
+    msg_hash = hashlib.md5(f"{uid}:{message.chat.id}:{text}:{message.date}".encode()).hexdigest()
+    cache_key = f"msg_dedup:{msg_hash}"
+    if redis_client:
+        try:
+            if redis_client.get(cache_key):
+                logger.debug(f"Duplicate message detected: {msg_hash}, skipping")
+                return
+            redis_client.setex(cache_key, 2, "1")
+        except Exception as e:
+            logger.debug(f"Dedup check failed: {e}")
+    
+    text_normalized = text_normalization.normalize_text(text)
     signals = text_normalization.extract_signals(text)
 
     # Record message in memory cache
@@ -205,7 +264,6 @@ def ingest(client, message):
         ts=message.date.timestamp(),
     )
 
-
     # Assess overall risk
     risk_result = assess_user_risk(uid, message.chat.id, text)
     
@@ -219,12 +277,12 @@ def ingest(client, message):
     
     if should_act:
         if action == "STRIKE":
-            strikes = strike_manager.process_strike(uid, reason=sig_type)
-            logger.warning(f"User {uid}: {strikes}")
+            strike_result = strike_manager.process_strike(uid, reason=sig_type)
+            logger.warning(f"User {uid}: Strike processed - {strike_result}")
         elif action == "DELETE":
             logger.error(f"User {uid} banned - deleting message")
     
-    # Also send to queue for worker processing (existing system)
+    # Send to queue for worker processing (existing system)
     event = {
         "type": "message",
         "uid": uid,
@@ -237,20 +295,32 @@ def ingest(client, message):
         "risk_score": risk_result["score"]
     }
     
-    try:
-        if redis_client:
+    if redis_client:
+        try:
             redis_client.rpush(IN_QUEUE, json.dumps(event))
-    except Exception as e:
-        logger.error(f"failed to send event to queue: {e}")
+        except Exception as e:
+            logger.error(f"failed to send event to queue: {e}")
 
 
 @bot.on_chat_member_updated()
-def member_change(client, event):
-    # track joins and leaves for raid detection
+async def member_change(client, event):
+    """Track joins and leaves for raid detection."""
     if event.new_chat_member and event.new_chat_member.status == "member":
         uid = event.new_chat_member.user.id
         chat_id = event.chat.id
         ts = event.date.timestamp() if hasattr(event, "date") else time.time()
+
+        # Deduplication: Skip if we've seen this join in the last 3 seconds
+        join_hash = hashlib.md5(f"{uid}:{chat_id}:join:{event.date}".encode()).hexdigest()
+        cache_key = f"join_dedup:{join_hash}"
+        if redis_client:
+            try:
+                if redis_client.get(cache_key):
+                    logger.debug(f"Duplicate join detected: {join_hash}, skipping")
+                    return
+                redis_client.setex(cache_key, 3, "1")
+            except Exception as e:
+                logger.debug(f"Join dedup check failed: {e}")
 
         # Check if user is banned
         if ban_manager.is_user_banned(uid):
@@ -324,5 +394,24 @@ if __name__ == "__main__":
         logger.info("🎉 All tests passed! Bot is ready.")
         sys.exit(0)
     
+    # Acquire exclusive lock to prevent multiple instances
+    lock_fd = None
+    try:
+        lock_fd = _acquire_lock()
+        logger.info("✓ Acquired exclusive lock for public_bot")
+    except RuntimeError as e:
+        logger.error(f"✗ {e}")
+        sys.exit(1)
+    
     # Normal mode: start the bot
-    bot.run()
+    try:
+        logger.info("Starting public bot...")
+        bot.run()
+    except KeyboardInterrupt:
+        logger.info("Bot interrupted by user")
+    except Exception as e:
+        logger.error(f"Bot error: {e}", exc_info=True)
+        sys.exit(1)
+    finally:
+        _release_lock(lock_fd)
+        logger.info("Public bot shutdown complete")

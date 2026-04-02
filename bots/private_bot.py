@@ -52,6 +52,53 @@ SESSION_DIR = ROOT_DIR / "sessions"
 SESSION_DIR.mkdir(parents=True, exist_ok=True)
 SESSION_NAME = "private_bot"
 
+# Lock file to prevent multiple instances
+LOCK_FILE = ROOT_DIR / f".{SESSION_NAME}.lock"
+
+
+def _acquire_lock():
+    """Acquire exclusive lock to prevent multiple instances."""
+    import fcntl
+    import platform
+    
+    if platform.system() == "Windows":
+        # Windows doesn't support fcntl, use simple file check
+        if LOCK_FILE.exists():
+            try:
+                # Check if the lock is stale (older than 5 minutes)
+                import time as time_module
+                age = time_module.time() - LOCK_FILE.stat().st_mtime
+                if age < 300:  # 5 minutes
+                    raise RuntimeError(f"Another instance of {SESSION_NAME} is already running")
+            except OSError:
+                pass
+        LOCK_FILE.write_text(str(os.getpid()))
+    else:
+        # Unix: use fcntl for proper locking
+        lock_fd = open(LOCK_FILE, 'w')
+        try:
+            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            lock_fd.write(str(os.getpid()))
+            lock_fd.flush()
+            return lock_fd
+        except IOError:
+            raise RuntimeError(f"Another instance of {SESSION_NAME} is already running")
+    
+    return None
+
+
+def _release_lock(lock_fd=None):
+    """Release lock file."""
+    try:
+        if lock_fd:
+            import fcntl
+            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
+            lock_fd.close()
+        if LOCK_FILE.exists():
+            LOCK_FILE.unlink()
+    except Exception:
+        pass
+
 priv_bot = Client(
     SESSION_NAME,
     api_id=config.API_ID,
@@ -664,16 +711,17 @@ async def test_command(client, message: Message):
         test_user = 999999
         memory.record_message(test_user, "test", -100999)
         profile = memory.get_user_profile(test_user)
-        assert profile is not None
+        assert profile is not None, "Memory service failed to create profile"
 
         # Test strike system
-        strike_manager.process_strike(test_user, "test")
+        action = strike_manager.process_strike(test_user, "test")
         strikes = memory.get_strikes(test_user)
-        assert strikes == 1
+        assert strikes == 1, f"Strike count mismatch: expected 1, got {strikes}"
 
         # Test risk assessment
         risk = assess_user_risk(test_user, -100999, "test")
-        assert "level" in risk
+        assert "level" in risk, "Risk assessment missing 'level' key"
+        assert "score" in risk, "Risk assessment missing 'score' key"
 
         # Clean up test data
         store = memory.load_store()
@@ -682,6 +730,8 @@ async def test_command(client, message: Message):
             memory.save_store(store)
 
         await message.reply_text("✅ All tests passed!")
+    except AssertionError as e:
+        await message.reply_text(f"❌ Test assertion failed: {e}")
     except Exception as e:
         await message.reply_text(f"❌ Test failed: {e}")
 
@@ -761,6 +811,15 @@ if __name__ == "__main__":
         logger.info("🎉 All private bot tests passed!")
         sys.exit(0)
 
+    # Acquire exclusive lock to prevent multiple instances
+    lock_fd = None
+    try:
+        lock_fd = _acquire_lock()
+        log.info(f"✓ Acquired exclusive lock for {SESSION_NAME}")
+    except RuntimeError as e:
+        log.error(f"✗ {e}")
+        sys.exit(1)
+
     # Start listening on a background thread while bot runs
     import threading
     action_thread = threading.Thread(target=main, daemon=True)
@@ -776,3 +835,5 @@ if __name__ == "__main__":
         log.error(f"Failed to run private bot: {e}", exc_info=True)
         traceback.print_exc()
         raise
+    finally:
+        _release_lock(lock_fd)
