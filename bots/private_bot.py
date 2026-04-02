@@ -767,35 +767,45 @@ if __name__ == "__main__":
 
     if args.test_mode:
         # Test mode: validate imports and basic functionality
-        logger = logging.getLogger("private_bot_test")
-        logger.info("Running private bot in test mode...")
+        test_logger = logging.getLogger("private_bot_test")
+        test_logger.info("Running private bot in test mode...")
 
         # Test imports
         try:
             from services import memory, strike_manager, ban_manager
             from engine.risk_assessment import assess_user_risk
-            logger.info("✓ All imports successful")
+            test_logger.info("All imports successful")
         except ImportError as e:
-            logger.error(f"✗ Import error: {e}")
+            test_logger.error(f"Import error: {e}")
             sys.exit(1)
 
         # Test admin functions
         try:
+            # Use a unique test user ID to avoid conflicts
+            import random
+            test_user = 999000 + random.randint(0, 999)
+            
+            # First, clear any existing data for this user
+            store = memory.load_store()
+            if str(test_user) in store.get("users", {}):
+                del store["users"][str(test_user)]
+                memory.save_store(store)
+            
             # Test memory operations
-            test_user = 999998
             memory.record_message(test_user, "test", -100999)
             profile = memory.get_user_profile(test_user)
-            assert profile is not None
+            assert profile is not None, "Profile is None"
 
             # Test strike operations
-            strike_manager.process_strike(test_user, "test")
+            action = strike_manager.process_strike(test_user, "test")
             strikes = memory.get_strikes(test_user)
-            assert strikes == 1
+            assert strikes == 1, f"Strike count: {strikes}, expected 1"
 
             # Test ban operations
             ban_manager.ban_user(test_user, "test ban")
             profile = memory.get_user_profile(test_user)
-            assert profile.get("banned", False)
+            is_banned = profile.get("banned", False)
+            assert is_banned, f"User not banned, profile: {profile}"
 
             # Clean up
             store = memory.load_store()
@@ -803,12 +813,12 @@ if __name__ == "__main__":
                 del store["users"][str(test_user)]
                 memory.save_store(store)
 
-            logger.info("✓ Admin functions working")
+            test_logger.info("Admin functions working")
         except Exception as e:
-            logger.error(f"✗ Admin function error: {e}")
+            test_logger.error(f"Admin function error: {str(e)}", exc_info=True)
             sys.exit(1)
 
-        logger.info("🎉 All private bot tests passed!")
+        test_logger.info("All private bot tests passed!")
         sys.exit(0)
 
     # Acquire exclusive lock to prevent multiple instances
