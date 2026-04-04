@@ -7,6 +7,11 @@ on:
   push:
     branches: [main]
 
+# workflows that interact with the security tab need write permission to security-events
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   security:
     runs-on: ubuntu-latest
@@ -22,7 +27,8 @@ jobs:
           output: 'trivy-results.sarif'
       
       - name: Upload Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
+        # CodeQL v1/v2 are deprecated; upgrade to v3
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-results.sarif'
       
@@ -30,3 +36,18 @@ jobs:
         run: |
           pip install safety
           safety check --json
+
+  codeql:
+    # static analysis with CodeQL
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+

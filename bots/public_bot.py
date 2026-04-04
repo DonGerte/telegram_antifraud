@@ -5,6 +5,10 @@ import json
 import time
 import hashlib
 from collections import defaultdict
+import sys
+
+# Add project root to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     import redis
@@ -12,89 +16,96 @@ except ImportError:
     redis = None
 
 from engine import honeypot
+from engine import scoring as scoring_engine
+from engine import text_normalization
+from engine.heuristics import compute_signal
+from engine.risk_assessment import assess_user_risk, should_action_on_message
+from services import memory, strike_manager, ban_manager, user_history
+from services import db
 import config
 
 # Redis queue names
 IN_QUEUE = "data_bus"
 OUT_QUEUE = "action_bus"
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("public_bot")
 
 # connect to Redis broker
 redis_client = None
-if redis:
+if redis and config.REDIS_URL:
     try:
         redis_client = redis.from_url(config.REDIS_URL)
-    except Exception:
+        logger.info("Redis conectado")
+    except Exception as e:
+        logger.warning(f"Redis no disponible: {e}")
         redis_client = None
 
-bot = Client("public_bot", bot_token=config.PUBLIC_BOT_TOKEN)
-
-# in-memory tracking for velocity and repetition
-user_message_times = defaultdict(list)  # uid -> [ts, ts, ...]
-user_message_hashes = defaultdict(list)  # uid -> [hash, hash, ...]
-
-
-def compute_signal(message):
-    """Return (signal_type, value) tuple based on heuristics.
-    
-    Detects links, honeypots, velocity (msgs/hour), and message repetition.
-    """
-    sig_type = "none"
-    value = 0.0
-    uid = message.from_user.id if message.from_user else None
-
-    text = message.text or message.caption or ""
-    
-    # 1: link detection
-    if text and ("http" in text or honeypot.LINK_PATTERN.search(text)):
-        sig_type = "link"
-        value += 5
-    
-    # 2: honeypot detection (overwrites if found)
-    if text and honeypot.check_honeypot(text):
-        sig_type = "honeypot"
-        value += 10
-    
-    # 3: velocity heuristic (messages in last hour)
-    if uid:
-        now = time.time()
-        user_message_times[uid] = [
-            t for t in user_message_times[uid] if now - t < 3600
-        ]
-        user_message_times[uid].append(now)
-        msg_count = len(user_message_times[uid])
-        if msg_count > 50:
-            value += 3
-            if sig_type == "none":
-                sig_type = "velocity"
-        elif msg_count > 20:
-            value += 1
-    
-    # 4: repetition detection
-    if uid and text:
-        text_hash = hashlib.md5(text.lower().strip().encode()).hexdigest()
-        user_message_hashes[uid].append(text_hash)
-        user_message_hashes[uid] = user_message_hashes[uid][-100:]
-        repeat_count = sum(1 for h in user_message_hashes[uid] if h == text_hash)
-        if repeat_count > 3:
-            value += 4
-            if sig_type == "none":
-                sig_type = "repetition"
-    
-    return sig_type, value
-
+bot = Client("public_bot", 
+             api_id=config.API_ID,
+             api_hash=config.API_HASH,
+             bot_token=config.PUBLIC_BOT_TOKEN)
 
 def enqueue_action(action, payload):
     event = {"action": action, **payload}
-    logging.info(f"enqueue {event}")
+    logger.info(f"enqueue {event}")
     if not redis_client:
-        logging.warning("redis not configured, cannot enqueue")
+        logger.warning("redis not configured, cannot enqueue")
         return
     try:
         redis_client.rpush(OUT_QUEUE, json.dumps(event))
     except Exception as e:
-        logging.error(f"failed to enqueue action: {e}")
+        logger.error(f"failed to enqueue action: {e}")
+
+
+@bot.on_message(filters.command("start"))
+async def start_command(client, message):
+    """Handle /start command in chats"""
+    logger.info(f"/start received in chat {message.chat.id} by user {message.from_user.id if message.from_user else 'unknown'}")
+    await message.reply_text(
+        "🤖 **Telegram Antifraud Bot**\n\n"
+        "Este bot monitorea mensajes en grupos para detectar spam, raids y comportamiento malicioso.\n\n"
+        "Para usar el bot:\n"
+        "1. Agrega el bot a un grupo como administrador\n"
+        "2. El bot analizará automáticamente todos los mensajes\n"
+        "3. Usa el bot admin para gestionar usuarios y ver estadísticas\n\n"
+        "Comandos disponibles:\n"
+        "/help - Mostrar esta ayuda\n"
+        "/status - Estado del bot\n\n"
+        "Para comandos administrativos, usa el bot privado."
+    )
+
+
+@bot.on_message(filters.command("help"))
+async def help_command(client, message):
+    """Handle /help command"""
+    logger.info(f"/help received in chat {message.chat.id} by user {message.from_user.id if message.from_user else 'unknown'}")
+    await start_command(client, message)
+
+
+@bot.on_message(filters.command("status"))
+async def status_command(client, message):
+    """Handle /status command"""
+    try:
+        store = memory.load_store()
+        users = store.get("users", {})
+        total_users = len(users)
+        banned_users = sum(1 for u in users.values() if u.get("banned", False))
+
+        status_text = (
+            "📊 **Bot Status**\n\n"
+            f"👥 Usuarios registrados: {total_users}\n"
+            f"🚫 Usuarios baneados: {banned_users}\n"
+            f"🔄 Estado: {'Activo' if redis_client else 'Sin Redis'}\n"
+            f"⚙️ Modo: {'Producción' if config.PUBLIC_BOT_TOKEN else 'Desarrollo'}\n"
+        )
+
+        await message.reply_text(status_text)
+    except Exception as e:
+        await message.reply_text(f"❌ Error obteniendo status: {e}")
 
 
 @bot.on_message(filters.group)
@@ -102,7 +113,55 @@ def ingest(client, message):
     uid = message.from_user.id if message.from_user else None
     if not uid:
         return
+
+    text = message.text or message.caption or ""
+    normalized = text_normalization.normalize_text(text)
+    signals = text_normalization.extract_signals(text)
+
+    # Record message in memory cache
+    memory.record_message(uid, text, message.chat.id)
+
+    # Get signal from heuristics
     sig_type, sig_value = compute_signal(message)
+
+    # Store event in persistent history
+    user_history.record_event(
+        user_id=uid,
+        chat_id=message.chat.id,
+        signal=sig_type,
+        value=sig_value,
+        ts=message.date,
+    )
+
+    # Add scoring signal to in-memory score flow
+    scoring_engine.add_signal(
+        uid,
+        signal_type=sig_type,
+        value=sig_value,
+        chat=message.chat.id,
+        ts=message.date.timestamp(),
+    )
+
+
+    # Assess overall risk
+    risk_result = assess_user_risk(uid, message.chat.id, text)
+    
+    logger.info(
+        f"[{message.chat.id}] User {uid} | Signal: {sig_type} ({sig_value}) | "
+        f"Risk: {risk_result['level']} ({risk_result['score']:.0f})"
+    )
+    
+    # Determine if action needed
+    should_act, action = should_action_on_message(risk_result)
+    
+    if should_act:
+        if action == "STRIKE":
+            strikes = strike_manager.process_strike(uid, reason=sig_type)
+            logger.warning(f"User {uid}: {strikes}")
+        elif action == "DELETE":
+            logger.error(f"User {uid} banned - deleting message")
+    
+    # Also send to queue for worker processing (existing system)
     event = {
         "type": "message",
         "uid": uid,
@@ -110,27 +169,97 @@ def ingest(client, message):
         "ts": message.date.timestamp(),
         "signal_type": sig_type,
         "value": sig_value,
-        "raw": message.text or message.caption or ""
+        "raw": text,
+        "risk_level": risk_result["level"],
+        "risk_score": risk_result["score"]
     }
+    
     try:
-        redis_client.rpush(IN_QUEUE, json.dumps(event))
+        if redis_client:
+            redis_client.rpush(IN_QUEUE, json.dumps(event))
     except Exception as e:
-        logging.error(f"failed to send event: {e}")
+        logger.error(f"failed to send event to queue: {e}")
 
 
-@bot.on_chat_member()
+@bot.on_chat_member_updated()
 def member_change(client, event):
     # track joins and leaves for raid detection
     if event.new_chat_member and event.new_chat_member.status == "member":
         uid = event.new_chat_member.user.id
         chat_id = event.chat.id
         ts = event.date.timestamp() if hasattr(event, "date") else time.time()
+
+        # Check if user is banned
+        if ban_manager.is_user_banned(uid):
+            logger.warning(f"Banned user {uid} joined {chat_id} - should restrict")
+
         join_event = {"type": "join", "chat": chat_id, "uid": uid, "ts": ts}
         try:
-            redis_client.rpush(IN_QUEUE, json.dumps(join_event))
+            if redis_client:
+                redis_client.rpush(IN_QUEUE, json.dumps(join_event))
         except Exception as e:
-            logging.error(f"failed to enqueue join: {e}")
+            logger.error(f"failed to enqueue join: {e}")
 
 
 if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Telegram Antifraud Bot")
+    parser.add_argument("--test-mode", action="store_true", help="Run in test mode (no Telegram connection)")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose logging")
+    
+    args = parser.parse_args()
+    
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+    
+    if args.test_mode:
+        # Test mode: validate imports and basic functionality
+        logger.info("Running in test mode...")
+        
+        # Test imports
+        try:
+            from engine import honeypot, scoring
+            from services import memory, strike_manager, ban_manager
+            from engine.risk_assessment import assess_user_risk
+            logger.info("✓ All imports successful")
+        except ImportError as e:
+            logger.error(f"✗ Import error: {e}")
+            sys.exit(1)
+        
+        # Test memory service
+        try:
+            memory.record_message(12345, "test message", -100123)
+            profile = memory.get_user_profile(12345)
+            assert profile is not None
+            assert profile["message_count"] == 1
+            logger.info("✓ Memory service working")
+        except Exception as e:
+            logger.error(f"✗ Memory service error: {e}")
+            sys.exit(1)
+        
+        # Test strike system
+        try:
+            strike_manager.process_strike(12345, "test")
+            strikes = memory.get_strikes(12345)
+            assert strikes == 1
+            logger.info("✓ Strike system working")
+        except Exception as e:
+            logger.error(f"✗ Strike system error: {e}")
+            sys.exit(1)
+        
+        # Test risk assessment
+        try:
+            risk = assess_user_risk(12345, -100123, "test")
+            assert "level" in risk
+            assert "score" in risk
+            logger.info("✓ Risk assessment working")
+        except Exception as e:
+            logger.error(f"✗ Risk assessment error: {e}")
+            sys.exit(1)
+        
+        logger.info("🎉 All tests passed! Bot is ready.")
+        sys.exit(0)
+    
+    # Normal mode: start the bot
     bot.run()

@@ -11,11 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create GitHub Release from tag
-        uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
-          body_path: CHANGELOG.md
+      
+      - name: Create Release from Tag
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "Creating release for tag: $TAG_NAME"
+          gh release create "$TAG_NAME" \
+            --title "Release $TAG_NAME" \
+            --notes-file CHANGELOG.md \
+            --draft=false || echo "Release already exists or creation failed"

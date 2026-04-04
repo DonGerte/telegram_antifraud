@@ -1,4 +1,8 @@
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Credentials for bots and API access
 PUBLIC_BOT_TOKEN = os.environ.get("PUBLIC_BOT_TOKEN")
@@ -16,5 +20,14 @@ RAID_WINDOW = int(os.environ.get("RAID_WINDOW", "300"))
 
 # path to JSON file containing decision rules (optional)
 RULES_FILE = os.environ.get("RULES_FILE", "rules.json")
+
+WEBHOOK_SECRET_TOKEN = os.environ.get("WEBHOOK_SECRET_TOKEN", "")
+ALLOWED_UPDATES = os.environ.get("ALLOWED_UPDATES", "[\"message\",\"edited_channel_post\",\"callback_query\"]")
+
+# Admin IDs for private bot control (comma-separated user IDs)
+ADMIN_IDS = [int(x) for x in os.environ.get("ADMIN_IDS", "").split(",") if x.strip().isdigit()]
+
+# External API authentication
+API_KEY = os.environ.get("API_KEY", "")
 
 # other configuration values can be added here

@@ -1,6 +1,8 @@
 import time
 import json
+import math
 from collections import defaultdict
+from datetime import datetime, timedelta
 
 try:
     import redis
@@ -8,6 +10,7 @@ except ImportError:
     redis = None
 
 import config
+from services.user_history import get_user_events
 
 # almacena señales por usuario en memoria
 user_signals = defaultdict(list)
@@ -19,6 +22,13 @@ if redis and config.REDIS_URL:
         _redis = redis.from_url(config.REDIS_URL)
     except Exception:
         _redis = None
+
+DECAY_LAMBDA = 0.1
+
+
+def _decay(age_seconds: float) -> float:
+    age_hours = age_seconds / 3600.0
+    return math.exp(-DECAY_LAMBDA * age_hours)
 
 
 def add_signal(uid: int, signal_type: str, value: float, chat: int, ts=None):
@@ -33,9 +43,15 @@ def add_signal(uid: int, signal_type: str, value: float, chat: int, ts=None):
             pass
 
 
-def compute_score(uid: int):
-    # si no hay señales en memoria, intentar cargar desde Redis
+def compute_score(uid: int, window_hours: int = 24):
+    now = datetime.utcnow()
+    window_start = now - timedelta(hours=window_hours)
+    score = 0.0
+
+    # events from resident cache (more recent) and stored history
     entries = user_signals.get(uid, [])
+
+    # read Redis fallback
     if not entries and _redis:
         try:
             raw = _redis.lrange(f"signals:{uid}", 0, -1)
@@ -45,13 +61,25 @@ def compute_score(uid: int):
         except Exception:
             pass
 
-    score = 0.0
-    decay = 0.99
+    # include stored events from history
+    history = get_user_events(uid, from_ts=window_start)
+    for h in history:
+        entries.append({
+            "type": h.get("signal", "normal"),
+            "value": h.get("value", 1.0),
+            "chat": h.get("chat_id"),
+            "ts": (h.get("ts").timestamp() if isinstance(h.get("ts"), datetime)
+               else (datetime.fromisoformat(h.get("ts")).timestamp() if isinstance(h.get("ts"), str) else time.mktime(h.get("ts").timetuple()))),
+        })
+
     for e in entries:
         age = time.time() - e["ts"]
-        weight = (decay ** (age / 3600))
-        score += e["value"] * weight
-    return score
+        if age < 0:
+            age = 0
+        w = _decay(age)
+        score += float(e.get("value", 1.0)) * w
+
+    return min(score, 100.0)
 
 
 if __name__ == "__main__":
